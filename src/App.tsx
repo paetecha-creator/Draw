@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { Lock, Loader2 } from 'lucide-react';
 import {
@@ -13,7 +13,7 @@ import {
   PartyConfig,
   Prize,
 } from './types/party';
-import { FirestoreService } from './services/firestoreService';
+import { FirestoreService, toSafeDocId } from './services/firestoreService';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { RegistrationForm } from './components/RegistrationForm';
@@ -63,6 +63,7 @@ export default function App() {
     return sessionStorage.getItem('admin_session_auth') === 'true';
   });
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+  const isVipDrawingRef = useRef(false);
 
   // Sync my personal pass when registrations update from Firestore
   useEffect(() => {
@@ -95,6 +96,14 @@ export default function App() {
       FirestoreService.subscribeLuckyWinners((freshWinners) => {
         if (isMounted) setLuckyWinners(freshWinners);
       }),
+      FirestoreService.subscribeLocalSync((area) => {
+        if (!isMounted) return;
+        if (area === 'config' || area === 'all') setConfig(FirestoreService.getCachedConfig());
+        if (area === 'roster' || area === 'all') setRoster(FirestoreService.getCachedRoster());
+        if (area === 'prizes' || area === 'all') setPrizes(FirestoreService.getCachedPrizes());
+        if (area === 'registrations' || area === 'all') setRegistrations(FirestoreService.getCachedRegistrations());
+        if (area === 'winners' || area === 'all') setLuckyWinners(FirestoreService.getCachedLuckyWinners());
+      }),
     ];
 
     FirestoreService.ensureInitialSeed()
@@ -117,57 +126,118 @@ export default function App() {
     };
   }, []);
 
-  // Compute eligible candidates for VIP draw trigger
+  // Compute eligible candidates (strictly exclude ALL previous winners and any disqualified/blocked guests)
   const eligibleCandidates = useMemo(() => {
-    const wonEmployeeIds = new Set(luckyWinners.map((w) => w.employeeId.toUpperCase()));
+    const wonEmployeeIds = new Set(luckyWinners.map((w) => w.employeeId.trim().toUpperCase()));
     const blockedGroupSet = new Set(config.blockedGroups || []);
 
     return registrations.filter((att) => {
-      const empId = att.employeeId.toUpperCase();
-      if (config.autoBlockPreviousWinners && wonEmployeeIds.has(empId)) return false;
+      const empId = att.employeeId.trim().toUpperCase();
+      if (wonEmployeeIds.has(empId)) return false;
       if (att.groupRole && blockedGroupSet.has(att.groupRole)) return false;
       if (att.isBlockedFromDraw) return false;
 
-      const rosterItem = roster.find((r) => r.id.toUpperCase() === empId);
+      const rosterItem = roster.find((r) => r.id.trim().toUpperCase() === empId);
       if (rosterItem?.isBlockedFromDraw) return false;
       if (rosterItem?.groupRole && blockedGroupSet.has(rosterItem.groupRole)) return false;
 
       return true;
     });
-  }, [registrations, luckyWinners, config.blockedGroups, config.autoBlockPreviousWinners, roster]);
+  }, [registrations, luckyWinners, config.blockedGroups, roster]);
 
-  // Handlers writing directly to Firestore with optimistic local state updates
-  const handleRegisterSuccess = async (newReg: AttendeeRegistration) => {
-    const saved = await FirestoreService.addRegistration(newReg);
-    setRegistrations((prev) => [saved, ...prev.filter((r) => r.id !== saved.id)]);
+  // Handlers writing directly to Firestore with instant optimistic local state updates
+  const handleRegisterSuccess = (newReg: AttendeeRegistration) => {
+    const empIdUpper = newReg.employeeId.trim().toUpperCase();
+    const docId = toSafeDocId('REG_', empIdUpper);
+    const existingReg = registrations.find(
+      (r) => r.employeeId.trim().toUpperCase() === empIdUpper || r.id === docId
+    );
+    const existingRoster = roster.find((r) => r.id.trim().toUpperCase() === empIdUpper);
+    const preserveBlocked = Boolean(
+      newReg.isBlockedFromDraw || existingReg?.isBlockedFromDraw || existingRoster?.isBlockedFromDraw
+    );
+
+    const saved: AttendeeRegistration = {
+      ...newReg,
+      id: docId,
+      employeeId: empIdUpper,
+      isBlockedFromDraw: preserveBlocked,
+    };
+
+    // Instant auto-redirect to Digital Ticket Pass without waiting on network latency
+    FirestoreService.setMyRegistrationId(docId);
+    setRegistrations((prev) => [saved, ...prev.filter((r) => r.id !== docId)]);
     setMyRegistration(saved);
     setCurrentView('ticket');
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Sync to Firestore in background (already written to localStorage + BroadcastChannel)
+    FirestoreService.addRegistration(saved).catch((err) => {
+      console.warn('Background registration sync warning:', err);
+    });
   };
 
   const handleUpdateConfig = async (newConfig: PartyConfig) => {
     setConfig(newConfig);
-    await FirestoreService.setConfig(newConfig);
+    try {
+      await FirestoreService.setConfig(newConfig);
+    } catch (err) {
+      console.warn('Config update sync warning:', err);
+    }
   };
 
   const handleUpdateRoster = async (newRoster: EmployeeRoster[]) => {
     setRoster(newRoster);
-    await FirestoreService.setRoster(newRoster);
+    try {
+      await FirestoreService.setRoster(newRoster);
+    } catch (err) {
+      console.warn('Roster update sync warning:', err);
+    }
   };
 
   const handleUpdatePrizes = async (newPrizes: Prize[]) => {
     setPrizes(newPrizes);
-    await FirestoreService.setPrizes(newPrizes);
+    try {
+      await FirestoreService.setPrizes(newPrizes);
+    } catch (err) {
+      console.warn('Prizes update sync warning:', err);
+    }
   };
 
   const handleAddLuckyWinner = async (newWinner: LuckyDrawRecord) => {
+    // Hard guard against duplicate winner or over-drawing prize stock
+    const alreadyWon = luckyWinners.some(
+      (w) => w.employeeId.trim().toUpperCase() === newWinner.employeeId.trim().toUpperCase()
+    );
+    if (alreadyWon) return;
+
+    const targetPrize = prizes.find((p) => p.id === newWinner.prizeId);
+    const drawnForPrize = luckyWinners.filter((w) => w.prizeId === newWinner.prizeId).length;
+    if (targetPrize && (targetPrize.remaining <= 0 || drawnForPrize >= targetPrize.quantity)) {
+      return;
+    }
+
     setLuckyWinners((prev) => [newWinner, ...prev.filter((w) => w.id !== newWinner.id)]);
     setPrizes((prev) =>
       prev.map((p) =>
         p.id === newWinner.prizeId ? { ...p, remaining: Math.max(0, p.remaining - 1) } : p
       )
     );
-    setConfig((prev) => ({ ...prev, isVipTriggerActive: false }));
-    await FirestoreService.addLuckyWinner(newWinner, config);
+    setConfig((prev) => ({
+      ...prev,
+      isVipTriggerActive: false,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
+    }));
+
+    try {
+      await FirestoreService.addLuckyWinner(newWinner, config);
+    } catch (err) {
+      console.warn('Add lucky winner sync warning:', err);
+    }
   };
 
   const handleDeleteLuckyWinner = async (recordId: string) => {
@@ -179,21 +249,88 @@ export default function App() {
           p.id === target.prizeId ? { ...p, remaining: Math.min(p.quantity, p.remaining + 1) } : p
         )
       );
-      await FirestoreService.deleteLuckyWinner(target);
+      if (config.claimCountdownWinnerId === recordId) {
+        setConfig((prev) => ({
+          ...prev,
+          claimCountdownEndAt: '',
+          claimCountdownWinnerId: '',
+          claimCountdownPrizeId: '',
+        }));
+      }
+      try {
+        await FirestoreService.deleteLuckyWinner(target);
+      } catch (err) {
+        console.warn('Delete lucky winner sync warning:', err);
+      }
+    }
+  };
+
+  const handleForfeitAndBlockWinner = async (record: LuckyDrawRecord) => {
+    const empUpper = record.employeeId.trim().toUpperCase();
+    const prizeId = record.prizeId;
+
+    setLuckyWinners((prev) => prev.filter((w) => w.id !== record.id));
+    setPrizes((prev) =>
+      prev.map((p) =>
+        p.id === prizeId ? { ...p, remaining: Math.min(p.quantity, p.remaining + 1) } : p
+      )
+    );
+    setRegistrations((prev) =>
+      prev.map((r) =>
+        r.employeeId.trim().toUpperCase() === empUpper ? { ...r, isBlockedFromDraw: true } : r
+      )
+    );
+    setRoster((prev) =>
+      prev.map((emp) =>
+        emp.id.trim().toUpperCase() === empUpper ? { ...emp, isBlockedFromDraw: true } : emp
+      )
+    );
+    setConfig((prev) => ({
+      ...prev,
+      vipActivePrizeId: prizeId,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
+    }));
+
+    try {
+      await FirestoreService.forfeitWinnerAndBlock(record, roster, registrations, config);
+    } catch (err) {
+      console.warn('Forfeit & block sync warning:', err);
     }
   };
 
   const handleResetAllLuckyDraws = async () => {
     setLuckyWinners([]);
     setPrizes((prev) => prev.map((p) => ({ ...p, remaining: p.quantity })));
-    await FirestoreService.resetAllLuckyDraws(prizes);
+    setConfig((prev) => ({
+      ...prev,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
+    }));
+    try {
+      await FirestoreService.resetAllLuckyDraws(prizes);
+    } catch (err) {
+      console.warn('Reset lucky draws sync warning:', err);
+    }
   };
 
   const handleClearRegistrations = async () => {
     setRegistrations([]);
     setLuckyWinners([]);
     setPrizes((prev) => prev.map((p) => ({ ...p, remaining: p.quantity })));
-    await FirestoreService.clearRegistrations(prizes);
+    setConfig((prev) => ({
+      ...prev,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
+    }));
+    try {
+      await FirestoreService.clearRegistrations(prizes);
+    } catch (err) {
+      console.warn('Clear registrations sync warning:', err);
+    }
     setMyRegistration(null);
   };
 
@@ -214,53 +351,80 @@ export default function App() {
       ...newConfig,
       isRegistrationOpen: true,
       isVipTriggerActive: false,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
     }));
-    await FirestoreService.startNewParty(config, prizes, newConfig, options);
+    try {
+      await FirestoreService.startNewParty(config, prizes, newConfig, options);
+    } catch (err) {
+      console.warn('Start new party sync warning:', err);
+    }
     setMyRegistration(null);
   };
 
   // VIP EXECUTIVE TRIGGER FUNCTION (No Login Required)
   const handleTriggerFromVipPhone = async () => {
-    if (!config.isVipTriggerActive) {
+    if (!config.isVipTriggerActive || isVipDrawingRef.current) {
       return;
     }
 
+    const getTrueRemaining = (p: Prize) => {
+      const drawnCount = luckyWinners.filter((w) => w.prizeId === p.id).length;
+      return Math.min(p.remaining, Math.max(0, p.quantity - drawnCount));
+    };
+
     const targetPrize =
-      prizes.find((p) => p.id === config.vipActivePrizeId && p.remaining > 0) ||
-      prizes.find((p) => p.remaining > 0);
+      prizes.find((p) => p.id === config.vipActivePrizeId && getTrueRemaining(p) > 0) ||
+      prizes.find((p) => getTrueRemaining(p) > 0);
 
     if (!targetPrize || eligibleCandidates.length === 0) {
       return;
     }
 
-    soundFX.playWinnerFanfare();
-    confetti({
-      particleCount: 150,
-      spread: 90,
-      origin: { y: 0.5 },
-      colors: ['#fbbf24', '#f59e0b', '#34d399', '#818cf8', '#f472b6'],
-    });
+    isVipDrawingRef.current = true;
+    try {
+      soundFX.playWinnerFanfare();
+      confetti({
+        particleCount: 160,
+        spread: 100,
+        origin: { y: 0.5 },
+        colors: ['#ec4899', '#fbbf24', '#06b6d4', '#10b981', '#8b5cf6', '#f43f5e'],
+      });
 
-    const randomIndex = Math.floor(Math.random() * eligibleCandidates.length);
-    const winnerAttendee = eligibleCandidates[randomIndex];
+      const randomIndex = Math.floor(Math.random() * eligibleCandidates.length);
+      const winnerAttendee = eligibleCandidates[randomIndex];
 
-    const winnerRecord: LuckyDrawRecord = {
-      id: `WIN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      prizeId: targetPrize.id,
-      prizeName: targetPrize.name,
-      prizeTier: targetPrize.tier,
-      employeeId: winnerAttendee.employeeId,
-      winnerName: winnerAttendee.fullName,
-      nickname: winnerAttendee.nickname,
-      department: winnerAttendee.department,
-      tableNumber: winnerAttendee.tableNumber,
-      selfieUrl: winnerAttendee.selfieUrl,
-      prizeImageUrl: targetPrize.imageUrl,
-      wonAt: new Date().toISOString(),
-      round: luckyWinners.length + 1,
-    };
+      // Final duplicate safety guard
+      const alreadyWon = luckyWinners.some(
+        (w) => w.employeeId.trim().toUpperCase() === winnerAttendee.employeeId.trim().toUpperCase()
+      );
+      if (alreadyWon) {
+        return;
+      }
 
-    await handleAddLuckyWinner(winnerRecord);
+      const winnerRecord: LuckyDrawRecord = {
+        id: `WIN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        prizeId: targetPrize.id,
+        prizeName: targetPrize.name,
+        prizeTier: targetPrize.tier,
+        employeeId: winnerAttendee.employeeId,
+        winnerName: winnerAttendee.fullName,
+        nickname: winnerAttendee.nickname,
+        department: winnerAttendee.department,
+        tableNumber: winnerAttendee.tableNumber,
+        selfieUrl: winnerAttendee.selfieUrl,
+        prizeImageUrl: targetPrize.imageUrl,
+        wonAt: new Date().toISOString(),
+        round: luckyWinners.length + 1,
+      };
+
+      await handleAddLuckyWinner(winnerRecord);
+    } finally {
+      setTimeout(() => {
+        isVipDrawingRef.current = false;
+      }, 1000);
+    }
   };
 
   const handleAdminLoginSuccess = () => {
@@ -277,11 +441,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col relative selection:bg-amber-400 selection:text-zinc-950 pb-16 md:pb-0 overflow-x-hidden transition-colors">
-      {/* Subtle Ambient Background Accents */}
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-amber-50/70 to-cyan-50 dark:bg-none dark:bg-[#0b041c] text-slate-900 dark:text-white flex flex-col relative selection:bg-fuchsia-500 selection:text-white pb-16 md:pb-0 overflow-x-hidden transition-colors">
+      {/* Vibrant Multi-Color Ambient Party Accents */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[720px] h-[380px] bg-gradient-to-b from-amber-500/10 dark:from-amber-500/8 via-amber-400/5 dark:via-amber-400/3 to-transparent blur-3xl rounded-full" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-500/8 dark:bg-indigo-500/5 blur-3xl rounded-full" />
+        <div className="absolute -top-36 -left-24 w-[480px] h-[420px] bg-gradient-to-br from-fuchsia-400/25 via-rose-400/20 to-amber-300/20 dark:from-fuchsia-600/20 dark:via-purple-600/15 dark:to-transparent blur-3xl rounded-full" />
+        <div className="absolute top-1/3 -right-24 w-[420px] h-[420px] bg-gradient-to-bl from-cyan-400/25 via-teal-300/15 to-emerald-300/20 dark:from-cyan-500/15 dark:via-indigo-500/10 dark:to-transparent blur-3xl rounded-full" />
+        <div className="absolute -bottom-32 left-1/3 w-[520px] h-[340px] bg-gradient-to-tr from-amber-300/25 via-pink-300/20 to-violet-400/20 dark:from-amber-500/10 dark:via-fuchsia-600/10 dark:to-transparent blur-3xl rounded-full" />
       </div>
 
       {/* Top Bar Navigation */}
@@ -295,8 +460,8 @@ export default function App() {
 
       {/* Floating banner when admin is previewing attendee view */}
       {isAdminLoggedIn && currentView !== 'admin' && (
-        <div className="w-full bg-white dark:bg-zinc-900 border-b border-amber-500/30 dark:border-amber-400/30 text-zinc-900 dark:text-zinc-100 py-2 px-4 shadow-sm dark:shadow-md sticky top-14 sm:top-16 z-30 flex items-center justify-between gap-2 text-xs transition-colors">
-          <div className="font-semibold text-amber-700 dark:text-amber-300 truncate">
+        <div className="w-full bg-white/95 dark:bg-[#140a2b]/95 backdrop-blur-md border-b-2 border-fuchsia-300/70 dark:border-fuchsia-500/40 text-slate-900 dark:text-white py-2 px-4 shadow-sm dark:shadow-md sticky top-14 sm:top-16 z-30 flex items-center justify-between gap-2 text-xs transition-colors">
+          <div className="font-bold bg-gradient-to-r from-fuchsia-600 to-cyan-600 dark:from-fuchsia-300 dark:to-cyan-300 bg-clip-text text-transparent truncate">
             {t(
               'โหมดทดสอบ: กำลังแสดงมุมมองของผู้ร่วมงาน',
               'Preview Mode: Viewing as Event Attendee'
@@ -308,7 +473,7 @@ export default function App() {
               soundFX.playClick();
               setCurrentView('admin');
             }}
-            className="px-3 py-1.5 rounded-lg bg-amber-400 text-zinc-950 font-bold text-xs hover:bg-amber-300 transition cursor-pointer whitespace-nowrap shrink-0"
+            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 text-white font-extrabold text-xs hover:from-fuchsia-500 hover:to-amber-400 shadow-md transition cursor-pointer whitespace-nowrap shrink-0"
           >
             {t('กลับสู่แอดมิน →', 'Back to Admin →')}
           </button>
@@ -318,8 +483,8 @@ export default function App() {
       {/* Main Viewport Content */}
       <main className="flex-1 w-full max-w-6xl mx-auto px-3 sm:px-4 py-5 sm:py-10 relative z-10">
         {isInitialLoading ? (
-          <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 text-zinc-500 dark:text-zinc-400">
-            <Loader2 className="w-8 h-8 text-amber-500 dark:text-amber-400 animate-spin" />
+          <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 text-slate-600 dark:text-purple-200">
+            <Loader2 className="w-8 h-8 text-fuchsia-600 dark:text-cyan-400 animate-spin" />
             <p className="text-xs font-medium">
               {t('กำลังเชื่อมต่อฐานข้อมูล Firebase...', 'Connecting to Firebase database...')}
             </p>
@@ -347,8 +512,9 @@ export default function App() {
                     onRegisterAnother={() => setCurrentView('register')}
                   />
                 ) : (
-                  <div className="max-w-md mx-auto text-center p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg dark:shadow-xl">
-                    <p className="text-sm text-zinc-700 dark:text-zinc-300 mb-4 font-medium">
+                  <div className="max-w-md mx-auto text-center p-8 rounded-3xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-fuchsia-300/70 dark:border-fuchsia-500/40 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400" />
+                    <p className="text-sm text-slate-700 dark:text-purple-100 mb-4 font-semibold pt-1">
                       {t(
                         'คุณยังไม่ได้ลงทะเบียนเข้างาน กรุณาลงทะเบียนเพื่อรับบัตรและหมายเลขโต๊ะ',
                         'You have not checked in yet. Please register to get your digital pass and table number.'
@@ -357,7 +523,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setCurrentView('register')}
-                      className="min-h-[48px] px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-xs shadow-md cursor-pointer"
+                      className="min-h-[48px] px-6 py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 text-white font-extrabold text-xs shadow-lg shadow-fuchsia-500/25 cursor-pointer"
                     >
                       {t('ไปที่หน้าลงทะเบียน', 'Go to Check-in')}
                     </button>
@@ -372,6 +538,7 @@ export default function App() {
                 winners={luckyWinners}
                 prizes={prizes}
                 config={config}
+                candidates={registrations}
                 onBackToTicket={() => setCurrentView('ticket')}
                 hasMyPass={!!myRegistration}
               />
@@ -383,6 +550,7 @@ export default function App() {
                 config={config}
                 prizes={prizes}
                 luckyWinners={luckyWinners}
+                eligibleCount={eligibleCandidates.length}
                 onTriggerLuckyDraw={handleTriggerFromVipPhone}
                 onExitVipView={() => setCurrentView(myRegistration ? 'ticket' : 'register')}
               />
@@ -403,19 +571,22 @@ export default function App() {
                     onUpdatePrizes={handleUpdatePrizes}
                     onAddLuckyWinner={handleAddLuckyWinner}
                     onDeleteLuckyWinner={handleDeleteLuckyWinner}
+                    onForfeitAndBlockWinner={handleForfeitAndBlockWinner}
                     onResetAllLuckyDraws={handleResetAllLuckyDraws}
                     onClearRegistrations={handleClearRegistrations}
                     onStartNewParty={handleStartNewParty}
                     onLogout={handleAdminLogout}
                     onOpenVipView={() => setCurrentView('vip')}
+                    onOpenLiveView={() => setCurrentView('livedraw')}
                     onSwitchToUserView={() => setCurrentView(myRegistration ? 'ticket' : 'register')}
                   />
                 ) : (
-                  <div className="max-w-sm mx-auto text-center p-8 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg dark:shadow-xl">
-                    <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 mb-2">
+                  <div className="max-w-sm mx-auto text-center p-8 rounded-3xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-fuchsia-300/70 dark:border-fuchsia-500/40 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400" />
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white mb-2 pt-1">
                       {t('ต้องเข้าสู่ระบบแอดมินก่อน', 'Admin Login Required')}
                     </h3>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-4">
+                    <p className="text-xs text-slate-600 dark:text-purple-200/80 mb-4">
                       {t(
                         'กรุณากดรหัส PIN เพื่อเข้าใช้งานแดชบอร์ดแอดมิน',
                         'Please enter the Admin PIN to access the management dashboard.'
@@ -424,7 +595,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setIsAdminLoginModalOpen(true)}
-                      className="min-h-[48px] px-6 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-xs shadow-md cursor-pointer"
+                      className="min-h-[48px] px-6 py-2 rounded-xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 text-white font-extrabold text-xs shadow-lg shadow-fuchsia-500/25 cursor-pointer"
                     >
                       {t('เข้าสู่ระบบแอดมิน', 'Admin Login')}
                     </button>
@@ -445,7 +616,7 @@ export default function App() {
               soundFX.playClick();
               setIsAdminLoginModalOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-600 hover:text-zinc-700 dark:hover:text-zinc-400 font-medium transition cursor-pointer select-none py-1 px-3 rounded-lg hover:bg-zinc-200/60 dark:hover:bg-zinc-900"
+            className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-purple-300/50 hover:text-fuchsia-600 dark:hover:text-cyan-300 font-medium transition cursor-pointer select-none py-1 px-3 rounded-lg hover:bg-white/60 dark:hover:bg-white/5"
             title={t('เข้าสู่ระบบสำหรับทีมงานผู้จัดงาน', 'Organizer Admin Login')}
           >
             <Lock className="w-2.5 h-2.5" />

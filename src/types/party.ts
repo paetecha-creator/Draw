@@ -67,4 +67,7 @@ export interface PartyConfig {
   autoBlockPreviousWinners: boolean; // Cannot win twice
   isVipTriggerActive: boolean; // Admin unlocks button for Executive
   vipActivePrizeId?: string; // Target prize for VIP draw
+  claimCountdownEndAt?: string; // ISO timestamp when 60s claim timer ends (empty = stopped)
+  claimCountdownWinnerId?: string; // Winner record ID currently being timed
+  claimCountdownPrizeId?: string; // Prize ID for the active countdown round
 }

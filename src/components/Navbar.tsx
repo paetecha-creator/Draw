@@ -20,7 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { theme, toggleTheme, lang, toggleLang, t } = usePreferences();
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 transition-colors">
+    <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-[#120627]/90 backdrop-blur-md border-b-2 border-fuchsia-300/60 dark:border-fuchsia-500/35 transition-colors shadow-sm">
       <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-3 sm:gap-8">
         {/* Zone 1: Brand Title Wordmark */}
         <button
@@ -31,16 +31,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           }}
           className="flex items-center gap-2 sm:gap-2.5 text-left whitespace-nowrap shrink-0 group cursor-pointer"
         >
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-400/20 dark:bg-amber-400/15 border border-amber-500/40 dark:border-amber-400/30 flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:bg-amber-400/30 transition-colors">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-fuchsia-500 via-orange-500 to-amber-400 flex items-center justify-center text-white shadow-md shadow-fuchsia-500/30 group-hover:scale-105 transition-transform">
             <PartyPopper className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <span className="text-base sm:text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100 whitespace-nowrap shrink-0">
-            PartyPass <span className="text-amber-600 dark:text-amber-400">Live</span>
+          <span className="text-base sm:text-lg font-extrabold tracking-tight text-zinc-900 dark:text-white whitespace-nowrap shrink-0">
+            PartyPass{' '}
+            <span className="bg-gradient-to-r from-fuchsia-600 via-orange-500 to-cyan-500 dark:from-amber-300 dark:via-fuchsia-400 dark:to-cyan-300 bg-clip-text text-transparent">
+              Live
+            </span>
           </span>
         </button>
 
         {/* Zone 2: Concise Navigation Links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-600 dark:text-zinc-300">
           <button
             type="button"
             onClick={() => {
@@ -49,8 +52,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer border-b-2 ${
               currentView === 'register'
-                ? 'text-amber-600 dark:text-amber-400 border-amber-500 dark:border-amber-400 font-semibold'
-                : 'border-transparent hover:text-zinc-900 dark:hover:text-zinc-100'
+                ? 'text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500 dark:border-fuchsia-400 font-bold'
+                : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             {t('ลงทะเบียนเข้างาน', 'Check-in')}
@@ -65,8 +68,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer border-b-2 ${
                 currentView === 'ticket'
-                  ? 'text-amber-600 dark:text-amber-400 border-amber-500 dark:border-amber-400 font-semibold'
-                  : 'border-transparent hover:text-zinc-900 dark:hover:text-zinc-100'
+                  ? 'text-cyan-600 dark:text-cyan-400 border-cyan-500 dark:border-cyan-400 font-bold'
+                  : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
               }`}
             >
               {t('บัตรเข้างาน & โต๊ะ', 'My Pass & Table')}
@@ -81,8 +84,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 border-b-2 ${
               currentView === 'livedraw'
-                ? 'text-amber-600 dark:text-amber-400 border-amber-500 dark:border-amber-400 font-semibold'
-                : 'border-transparent hover:text-zinc-900 dark:hover:text-zinc-100'
+                ? 'text-amber-600 dark:text-amber-300 border-amber-500 dark:border-amber-400 font-bold'
+                : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             <Trophy className="w-4 h-4 text-amber-500 dark:text-amber-400" />
@@ -99,15 +102,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               soundFX.playClick();
               toggleLang();
             }}
-            className="min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
+            className="min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-fuchsia-50 dark:bg-violet-950/80 hover:bg-fuchsia-100 dark:hover:bg-violet-900 border border-fuchsia-300/60 dark:border-fuchsia-500/40 text-zinc-800 dark:text-zinc-100 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
             title={t('สลับภาษา ไทย / อังกฤษ', 'Switch Language TH / EN')}
             aria-label={t('สลับภาษา ไทย / อังกฤษ', 'Switch Language TH / EN')}
           >
-            <Globe className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <Globe className="w-3.5 h-3.5 text-fuchsia-600 dark:text-cyan-400 shrink-0" />
             <span className="font-mono tracking-wide">
-              <span className={lang === 'th' ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400 dark:text-zinc-500'}>TH</span>
+              <span className={lang === 'th' ? 'text-fuchsia-600 dark:text-amber-300 font-extrabold' : 'text-zinc-400 dark:text-zinc-500'}>TH</span>
               <span className="text-zinc-400 dark:text-zinc-600 mx-0.5">/</span>
-              <span className={lang === 'en' ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400 dark:text-zinc-500'}>EN</span>
+              <span className={lang === 'en' ? 'text-cyan-600 dark:text-cyan-300 font-extrabold' : 'text-zinc-400 dark:text-zinc-500'}>EN</span>
             </span>
           </button>
 
@@ -118,14 +121,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               soundFX.playClick();
               toggleTheme();
             }}
-            className="min-h-[38px] min-w-[38px] sm:min-h-[40px] sm:min-w-[40px] p-2 rounded-xl bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 flex items-center justify-center transition cursor-pointer shrink-0"
+            className="min-h-[38px] min-w-[38px] sm:min-h-[40px] sm:min-w-[40px] p-2 rounded-xl bg-amber-50 dark:bg-violet-950/80 hover:bg-amber-100 dark:hover:bg-violet-900 border border-amber-300/70 dark:border-amber-400/40 text-zinc-800 dark:text-zinc-100 flex items-center justify-center transition cursor-pointer shrink-0"
             title={theme === 'dark' ? t('เปลี่ยนเป็นโหมดสว่าง (Light Mode)', 'Switch to Light Mode') : t('เปลี่ยนเป็นโหมดมืด (Dark Mode)', 'Switch to Dark Mode')}
             aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
             {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-amber-400" />
+              <Sun className="w-4 h-4 text-amber-300" />
             ) : (
-              <Moon className="w-4 h-4 text-zinc-700" />
+              <Moon className="w-4 h-4 text-violet-700" />
             )}
           </button>
 
@@ -137,10 +140,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 soundFX.playClick();
                 onChangeView(currentView === 'admin' ? (hasMyTicket ? 'ticket' : 'register') : 'admin');
               }}
-              className={`min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 shadow-md ${
                 currentView === 'admin'
-                  ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                  : 'bg-amber-400 text-zinc-950 hover:bg-amber-300'
+                  ? 'bg-violet-100 dark:bg-violet-900 text-violet-900 dark:text-white border border-violet-300 dark:border-violet-600'
+                  : 'bg-gradient-to-r from-fuchsia-500 via-orange-500 to-amber-400 text-white hover:brightness-110'
               }`}
             >
               <Shield className="w-3.5 h-3.5 shrink-0" />

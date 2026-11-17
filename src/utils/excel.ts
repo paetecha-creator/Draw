@@ -256,7 +256,7 @@ export function exportAttendeesToExcel(
       'กลุ่ม/บทบาท': att.groupRole || 'พนักงานทั่วไป',
       'เบอร์โทรศัพท์': att.phone || '-',
       'เวลาลงทะเบียน': formattedDate,
-      'สถานะการเซลฟี่': att.selfieUrl ? 'มีภาพเซลฟี่เรียบร้อย' : 'ไม่มีภาพ',
+      'สถานะรูปภาพ': att.selfieUrl ? 'อัปโหลดรูปภาพเรียบร้อย' : 'ไม่มีภาพ',
       'รางวัล Lucky Draw ที่ได้รับ': winnerMap.get(att.employeeId) || 'ยังไม่ได้รับรางวัล',
       'หมายเหตุ/อาหาร': att.dietaryOrNote || '-',
     };

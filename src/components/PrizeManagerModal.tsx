@@ -75,9 +75,23 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
       return;
     }
 
-    const numQty = Math.max(1, Number(quantity) || 1);
+    const drawnCount = prizeToEdit
+      ? Math.max(0, prizeToEdit.quantity - prizeToEdit.remaining)
+      : 0;
+    const numQty = Math.max(1, Math.floor(Number(quantity) || 1));
+
+    if (prizeToEdit && numQty < drawnCount) {
+      alert(
+        t(
+          `รางวัลนี้ถูกจับแจกไปแล้ว ${drawnCount} ชิ้น ไม่สามารถตั้งจำนวนรวมน้อยกว่า ${drawnCount} ได้`,
+          `This prize already has ${drawnCount} drawn winner(s). Quantity cannot be less than ${drawnCount}.`
+        )
+      );
+      return;
+    }
+
     const remainingCount = prizeToEdit
-      ? Math.max(0, numQty - (prizeToEdit.quantity - prizeToEdit.remaining))
+      ? Math.max(0, Math.min(numQty, numQty - drawnCount))
       : numQty;
 
     const darkGradients = [
@@ -105,24 +119,25 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 dark:bg-black/75 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 dark:bg-[#050212]/85 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-3xl bg-white dark:bg-[#140a2b] border-2 border-fuchsia-300/70 dark:border-fuchsia-500/40 shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400" />
         <button
           type="button"
           onClick={onClose}
-          className="min-h-[44px] min-w-[44px] absolute top-3 right-3 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+          className="min-h-[44px] min-w-[44px] absolute top-3 right-3 text-slate-500 dark:text-purple-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center rounded-xl hover:bg-fuchsia-50 dark:hover:bg-white/10 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="text-center mb-5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-400/20 dark:bg-amber-400/15 border border-amber-500/40 dark:border-amber-400/30 flex items-center justify-center mx-auto mb-2 text-amber-600 dark:text-amber-400">
+        <div className="text-center mb-5 pt-1">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-fuchsia-500 via-rose-500 to-amber-400 flex items-center justify-center mx-auto mb-2 text-white shadow-lg shadow-fuchsia-500/30">
             <Gift className="w-6 h-6" />
           </div>
-          <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+          <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
             {prizeToEdit ? t('แก้ไขข้อมูลของรางวัล', 'Edit Prize') : t('เพิ่มของรางวัลใหม่', 'Add New Prize')}
           </h3>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+          <p className="text-xs text-slate-600 dark:text-purple-200/80 mt-0.5">
             {t(
               'กำหนดชื่อ จำนวน และแนบรูปตัวอย่างของรางวัลสำหรับจับ Lucky Draw',
               'Set prize name, quantity, and optional sample image for the Lucky Draw.'
@@ -132,7 +147,7 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-xs font-bold text-slate-800 dark:text-purple-100 mb-1">
               {t('ชื่อของรางวัล', 'Prize Name')} <span className="text-rose-500 dark:text-rose-400">*</span>
             </label>
             <input
@@ -141,13 +156,13 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('เช่น iPhone 16 Pro Max, ทองคำ 1 บาท', 'e.g. iPhone 16 Pro Max, Gold Bar')}
-              className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 text-base sm:text-xs font-medium transition"
+              className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-fuchsia-50/50 dark:bg-[#0b051c] border-2 border-fuchsia-200 dark:border-fuchsia-500/30 focus:border-fuchsia-500 dark:focus:border-cyan-400 focus:outline-none text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-purple-400/50 text-base sm:text-xs font-medium transition"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+              <label className="block text-xs font-bold text-slate-800 dark:text-purple-100 mb-1">
                 {t('ระดับรางวัล (Tier)', 'Prize Tier')}
               </label>
               <input
@@ -155,27 +170,40 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
                 value={tier}
                 onChange={(e) => setTier(e.target.value)}
                 placeholder={t('เช่น Grand Prize, รางวัลที่ 1', 'e.g. Grand Prize')}
-                className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 text-base sm:text-xs font-medium transition"
+                className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-cyan-50/50 dark:bg-[#0b051c] border-2 border-cyan-200 dark:border-cyan-500/30 focus:border-cyan-500 dark:focus:border-cyan-400 focus:outline-none text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-purple-400/50 text-base sm:text-xs font-medium transition"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+              <label className="block text-xs font-bold text-slate-800 dark:text-purple-100 mb-1">
                 {t('จำนวนรางวัล (ชิ้น)', 'Quantity')} <span className="text-rose-500 dark:text-rose-400">*</span>
               </label>
               <input
                 type="number"
-                min="1"
+                min={prizeToEdit ? Math.max(1, prizeToEdit.quantity - prizeToEdit.remaining) : 1}
                 required
                 value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-zinc-900 dark:text-zinc-100 text-base sm:text-xs font-bold font-mono tabular-nums transition"
+                onChange={(e) => {
+                  const minAllowed = prizeToEdit
+                    ? Math.max(1, prizeToEdit.quantity - prizeToEdit.remaining)
+                    : 1;
+                  setQuantity(Math.max(minAllowed, parseInt(e.target.value, 10) || minAllowed));
+                }}
+                className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-amber-50/50 dark:bg-[#0b051c] border-2 border-amber-200 dark:border-amber-500/30 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-slate-900 dark:text-white text-base sm:text-xs font-bold font-mono tabular-nums transition"
               />
+              {prizeToEdit && prizeToEdit.quantity - prizeToEdit.remaining > 0 && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-300 font-semibold mt-1">
+                  {t(
+                    `แจกแล้ว ${prizeToEdit.quantity - prizeToEdit.remaining} ชิ้น (คงเหลือ ${Math.max(0, quantity - (prizeToEdit.quantity - prizeToEdit.remaining))} ชิ้น)`,
+                    `Drawn: ${prizeToEdit.quantity - prizeToEdit.remaining} (Left: ${Math.max(0, quantity - (prizeToEdit.quantity - prizeToEdit.remaining))})`
+                  )}
+                </p>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-xs font-bold text-slate-800 dark:text-purple-100 mb-1">
               {t('ผู้สนับสนุน / มอบโดย', 'Sponsor')}
             </label>
             <input
@@ -183,12 +211,12 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
               value={sponsor}
               onChange={(e) => setSponsor(e.target.value)}
               placeholder={t('เช่น CEO, คณะกรรมการจัดงาน', 'e.g. CEO, Organizing Committee')}
-              className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 text-base sm:text-xs font-medium transition"
+              className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-violet-50/50 dark:bg-[#0b051c] border-2 border-violet-200 dark:border-violet-500/30 focus:border-violet-500 dark:focus:border-fuchsia-400 focus:outline-none text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-purple-400/50 text-base sm:text-xs font-medium transition"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-xs font-bold text-slate-800 dark:text-purple-100 mb-1">
               {t('รายละเอียดเพิ่มเติม / สี / รุ่น', 'Description')}
             </label>
             <input
@@ -196,14 +224,14 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('เช่น 256GB สีไทเทเนียม', 'e.g. 256GB Titanium')}
-              className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 text-base sm:text-xs font-medium transition"
+              className="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-[#0b051c] border-2 border-slate-200 dark:border-purple-500/30 focus:border-fuchsia-500 dark:focus:border-cyan-400 focus:outline-none text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-purple-400/50 text-base sm:text-xs font-medium transition"
             />
           </div>
 
-          <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
-            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
+          <div className="pt-2 border-t border-fuchsia-200/70 dark:border-purple-500/20">
+            <label className="block text-xs font-bold text-slate-800 dark:text-purple-100 mb-1.5 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <ImageIcon className="w-3.5 h-3.5 text-fuchsia-600 dark:text-cyan-400" />
                 <span>{t('แนบรูปตัวอย่างของรางวัล', 'Sample Image')}</span>
               </span>
               {imagePreview && (
@@ -229,7 +257,7 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
             />
 
             {imagePreview ? (
-              <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-950 group flex items-center justify-center">
+              <div className="relative w-full h-36 rounded-2xl overflow-hidden border-2 border-fuchsia-300 dark:border-cyan-400/40 bg-slate-100 dark:bg-[#0b051c] group flex items-center justify-center">
                 <img
                   src={imagePreview}
                   alt={name || t('ตัวอย่างของรางวัล', 'Prize preview')}
@@ -240,7 +268,7 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="min-h-[44px] px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 text-xs font-bold shadow-md hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                    className="min-h-[44px] px-3 py-1.5 rounded-xl bg-white dark:bg-[#140a2b] text-slate-900 dark:text-white border border-fuchsia-300 dark:border-cyan-400/50 text-xs font-bold shadow-md hover:bg-fuchsia-50 dark:hover:bg-white/10 cursor-pointer"
                   >
                     {t('เปลี่ยนรูปภาพ', 'Change Photo')}
                   </button>
@@ -249,15 +277,15 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
             ) : (
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-amber-500/70 dark:hover:border-amber-400/70 rounded-2xl p-4 text-center cursor-pointer bg-zinc-50 dark:bg-zinc-950/60 hover:bg-zinc-100 dark:hover:bg-zinc-950 transition"
+                className="border-2 border-dashed border-fuchsia-300 dark:border-fuchsia-500/40 hover:border-cyan-500 dark:hover:border-cyan-400 rounded-2xl p-4 text-center cursor-pointer bg-gradient-to-br from-fuchsia-50/70 via-white to-cyan-50/70 dark:from-fuchsia-500/10 dark:via-[#0b051c] dark:to-cyan-500/10 transition"
               >
-                <div className="w-10 h-10 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mx-auto mb-1.5 text-amber-600 dark:text-amber-400">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-fuchsia-500 to-cyan-500 flex items-center justify-center mx-auto mb-1.5 text-white shadow-md">
                   <Upload className="w-5 h-5" />
                 </div>
-                <div className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                <div className="text-xs font-bold text-slate-800 dark:text-white">
                   {t('คลิกเพื่ออัปโหลดรูปตัวอย่างของรางวัล', 'Click to upload sample image')}
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-0.5">
+                <p className="text-[10px] text-slate-500 dark:text-purple-300/70 mt-0.5">
                   {t('รองรับไฟล์รูปภาพ PNG, JPG, WebP', 'Supports PNG, JPG, WebP')}
                 </p>
               </div>
@@ -272,7 +300,7 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
                   setImagePreview(e.target.value);
                 }}
                 placeholder={t('หรือวางลิงก์รูปภาพ (Image URL)...', 'Or paste image URL...')}
-                className="w-full min-h-[38px] px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-xs text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500"
+                className="w-full min-h-[38px] px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#0b051c] border border-slate-300 dark:border-purple-500/30 focus:border-fuchsia-500 dark:focus:border-cyan-400 focus:outline-none text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-purple-400/50"
               />
             </div>
           </div>
@@ -304,7 +332,7 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
 
             <button
               type="submit"
-              className="flex-1 min-h-[46px] py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-xs shadow-md active:scale-[0.98] transition flex items-center justify-center gap-1.5 cursor-pointer"
+              className="flex-1 min-h-[46px] py-2.5 px-4 rounded-xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 hover:from-fuchsia-500 hover:via-rose-400 hover:to-amber-400 text-white font-extrabold text-xs shadow-lg shadow-fuchsia-500/25 active:scale-[0.98] transition flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>{t('บันทึกข้อมูลของรางวัล', 'Save Prize')}</span>

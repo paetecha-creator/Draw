@@ -144,6 +144,24 @@ class SoundFX {
     });
   }
 
+  // Countdown tick sound
+  public playCountdownTick(urgent = false) {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = urgent ? 'triangle' : 'sine';
+    osc.frequency.setValueAtTime(urgent ? 980 : 720, t);
+    gain.gain.setValueAtTime(urgent ? 0.14 : 0.06, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + (urgent ? 0.09 : 0.05));
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + (urgent ? 0.1 : 0.06));
+  }
+
   // Short click
   public playClick() {
     if (this.isMuted) return;

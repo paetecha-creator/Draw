@@ -113,19 +113,20 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 dark:bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 dark:bg-[#050212]/85 backdrop-blur-md"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-[340px] rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-[340px] rounded-3xl bg-white dark:bg-[#140a2b] border-2 border-fuchsia-300/80 dark:border-fuchsia-500/40 p-5 sm:p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400" />
         <button
           type="button"
           onClick={() => {
             soundFX.playClick();
             onClose();
           }}
-          className="min-h-[44px] min-w-[44px] absolute top-3 right-3 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+          className="min-h-[44px] min-w-[44px] absolute top-3 right-3 text-slate-500 dark:text-purple-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center rounded-xl hover:bg-fuchsia-50 dark:hover:bg-white/10 transition cursor-pointer"
           aria-label={t('ปิดหน้าต่าง', 'Close')}
         >
           <X className="w-5 h-5" />
@@ -133,11 +134,11 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
 
         {/* Header */}
         <div className="text-center mb-5 pt-1">
-          <div className="w-12 h-12 rounded-2xl bg-amber-400/20 dark:bg-amber-400/15 border border-amber-500/40 dark:border-amber-400/30 flex items-center justify-center mx-auto mb-3 text-amber-600 dark:text-amber-400">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-cyan-500 flex items-center justify-center mx-auto mb-3 text-white shadow-lg shadow-fuchsia-500/30">
             {icon || <ShieldCheck className="w-6 h-6" />}
           </div>
-          <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{title}</h3>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">{subtitle}</p>
+          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">{title}</h3>
+          <p className="text-xs text-slate-600 dark:text-purple-200/80 mt-1">{subtitle}</p>
         </div>
 
         {/* PIN Dots Indicator */}
@@ -157,8 +158,8 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
                   isShaking
                     ? 'bg-rose-500 border-rose-500 scale-110'
                     : filled
-                    ? 'bg-amber-500 dark:bg-amber-400 border-amber-400 scale-110 shadow-[0_0_10px_rgba(251,191,36,0.45)]'
-                    : 'bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700'
+                    ? 'bg-gradient-to-r from-fuchsia-500 to-cyan-400 scale-125 shadow-[0_0_12px_rgba(236,72,153,0.6)]'
+                    : 'bg-slate-100 dark:bg-[#0b051c] border-2 border-fuchsia-200 dark:border-purple-500/40'
                 }`}
               />
             );
@@ -173,7 +174,7 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
               <span>{error}</span>
             </div>
           ) : (
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] text-slate-500 dark:text-purple-300/70">
               {t(`กดรหัส ${pinLength} หลัก — เข้าใช้งานอัตโนมัติทันที`, `Enter ${pinLength}-digit PIN — unlocks automatically`)}
             </span>
           )}
@@ -186,7 +187,7 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
               key={d}
               type="button"
               onClick={() => handleDigit(d)}
-              className="min-h-[56px] rounded-2xl bg-zinc-100 dark:bg-zinc-950 hover:bg-zinc-200 dark:hover:bg-zinc-800 active:bg-amber-400 active:text-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xl font-bold font-mono tabular-nums flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+              className="min-h-[56px] rounded-2xl bg-gradient-to-b from-fuchsia-50/80 to-cyan-50/80 dark:from-white/5 dark:to-white/[0.02] hover:from-fuchsia-100 hover:to-cyan-100 dark:hover:from-fuchsia-500/20 dark:hover:to-cyan-500/20 active:bg-gradient-to-r active:from-fuchsia-500 active:to-cyan-500 active:text-white border border-fuchsia-200 dark:border-purple-500/30 text-slate-900 dark:text-white text-xl font-bold font-mono tabular-nums flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-sm"
             >
               {d}
             </button>
@@ -195,7 +196,7 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
           <button
             type="button"
             onClick={handleClear}
-            className="min-h-[56px] rounded-2xl bg-zinc-50 dark:bg-zinc-950/70 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 text-xs font-semibold flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+            className="min-h-[56px] rounded-2xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center justify-center transition-all active:scale-95 cursor-pointer"
           >
             {t('ล้าง', 'Clear')}
           </button>
@@ -203,7 +204,7 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
           <button
             type="button"
             onClick={() => handleDigit('0')}
-            className="min-h-[56px] rounded-2xl bg-zinc-100 dark:bg-zinc-950 hover:bg-zinc-200 dark:hover:bg-zinc-800 active:bg-amber-400 active:text-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xl font-bold font-mono tabular-nums flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+            className="min-h-[56px] rounded-2xl bg-gradient-to-b from-fuchsia-50/80 to-cyan-50/80 dark:from-white/5 dark:to-white/[0.02] hover:from-fuchsia-100 hover:to-cyan-100 dark:hover:from-fuchsia-500/20 dark:hover:to-cyan-500/20 active:bg-gradient-to-r active:from-fuchsia-500 active:to-cyan-500 active:text-white border border-fuchsia-200 dark:border-purple-500/30 text-slate-900 dark:text-white text-xl font-bold font-mono tabular-nums flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-sm"
           >
             0
           </button>
@@ -211,7 +212,7 @@ export const NumpadPinModal: React.FC<NumpadPinModalProps> = ({
           <button
             type="button"
             onClick={handleBackspace}
-            className="min-h-[56px] rounded-2xl bg-zinc-50 dark:bg-zinc-950/70 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+            className="min-h-[56px] rounded-2xl bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
             aria-label={t('ลบตัวเลข', 'Backspace')}
           >
             <Delete className="w-5 h-5" />

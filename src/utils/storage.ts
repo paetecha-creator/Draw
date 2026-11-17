@@ -17,13 +17,16 @@ const DEFAULT_CONFIG: PartyConfig = {
   eventVenue: 'ห้องจัดเลี้ยง (Grand Ballroom)',
   eventContact: 'จุดต้อนรับหน้างาน',
   ticketTitle: 'OFFICIAL PARTY PASS & TABLE PASS',
-  registrationSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อยืนยันตัวตน',
-  themeColor: 'obsidian-gold',
+  registrationSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และอัปโหลดรูปภาพจากเครื่องเพื่อใช้แสดงผลรางวัล',
+  themeColor: 'vibrant-party',
   isRegistrationOpen: true,
   blockedGroups: ['ผู้บริหาร/กรรมการ'],
   autoBlockPreviousWinners: true,
   isVipTriggerActive: false,
   vipActivePrizeId: 'PRIZE-01',
+  claimCountdownEndAt: '',
+  claimCountdownWinnerId: '',
+  claimCountdownPrizeId: '',
 };
 
 // Create a BroadcastChannel for instantaneous multi-tab real-time sync

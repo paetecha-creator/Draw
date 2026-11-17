@@ -20,7 +20,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   const { t } = usePreferences();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 pb-safe shadow-2xl transition-colors">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#120627]/95 backdrop-blur-xl border-t-2 border-fuchsia-300/60 dark:border-fuchsia-500/35 pb-safe shadow-2xl transition-colors">
       <div className={`grid ${isAdminLoggedIn ? 'grid-cols-4' : 'grid-cols-3'} items-center h-14 px-1`}>
         {/* Tab 1: Register */}
         <button
@@ -31,8 +31,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           }}
           className={`flex flex-col items-center justify-center min-h-[44px] transition cursor-pointer ${
             currentView === 'register'
-              ? 'text-amber-600 dark:text-amber-400 font-semibold'
-              : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+              ? 'text-fuchsia-600 dark:text-fuchsia-400 font-bold'
+              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
           }`}
         >
           <UserCheck className="w-5 h-5" />
@@ -54,8 +54,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           }}
           className={`flex flex-col items-center justify-center min-h-[44px] transition relative cursor-pointer ${
             currentView === 'ticket'
-              ? 'text-amber-600 dark:text-amber-400 font-semibold'
-              : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+              ? 'text-cyan-600 dark:text-cyan-400 font-bold'
+              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
           }`}
         >
           <Ticket className="w-5 h-5" />
@@ -73,8 +73,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           }}
           className={`flex flex-col items-center justify-center min-h-[44px] transition relative cursor-pointer ${
             currentView === 'livedraw'
-              ? 'text-amber-600 dark:text-amber-400 font-semibold'
-              : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+              ? 'text-amber-600 dark:text-amber-300 font-bold'
+              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
           }`}
         >
           <Trophy className="w-5 h-5" />
@@ -91,8 +91,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             }}
             className={`flex flex-col items-center justify-center min-h-[44px] transition cursor-pointer ${
               currentView === 'admin'
-                ? 'text-amber-600 dark:text-amber-400 font-semibold'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+                ? 'text-violet-600 dark:text-violet-300 font-bold'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
             }`}
           >
             <Shield className="w-5 h-5" />

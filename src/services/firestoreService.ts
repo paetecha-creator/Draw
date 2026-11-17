@@ -54,13 +54,16 @@ export const DEFAULT_PARTY_CONFIG: PartyConfig = {
   eventVenue: 'ห้องจัดเลี้ยง (Grand Ballroom)',
   eventContact: 'จุดต้อนรับหน้างาน',
   ticketTitle: 'OFFICIAL PARTY PASS & TABLE PASS',
-  registrationSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อยืนยันตัวตน',
-  themeColor: 'obsidian-gold',
+  registrationSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และอัปโหลดรูปภาพจากเครื่องเพื่อใช้แสดงผลรางวัล',
+  themeColor: 'vibrant-party',
   isRegistrationOpen: true,
   blockedGroups: ['ผู้บริหาร/กรรมการ'],
   autoBlockPreviousWinners: true,
   isVipTriggerActive: false,
   vipActivePrizeId: 'PRIZE-01',
+  claimCountdownEndAt: '',
+  claimCountdownWinnerId: '',
+  claimCountdownPrizeId: '',
 };
 
 function readCache<T>(key: string): T | null {
@@ -98,6 +101,27 @@ export function toSafeDocId(prefix: string, raw: string): string {
   return full.slice(0, 120).replace(/[^A-Za-z0-9_\-]/g, '_');
 }
 
+let syncChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    syncChannel = new BroadcastChannel('party_realtime_sync_channel');
+  } catch {
+    syncChannel = null;
+  }
+}
+
+type SyncArea = 'config' | 'roster' | 'prizes' | 'registrations' | 'winners' | 'all';
+
+function emitLocalSync(area: SyncArea) {
+  if (syncChannel) {
+    try {
+      syncChannel.postMessage({ area, timestamp: Date.now() });
+    } catch {
+      // ignore broadcast failures
+    }
+  }
+}
+
 function sanitizeConfigPayload(config: PartyConfig, seeded = true): Record<string, unknown> {
   const blocked = Array.isArray(config.blockedGroups)
     ? config.blockedGroups.map((g) => clip(g, 100)).filter(Boolean).slice(0, 50)
@@ -112,12 +136,15 @@ function sanitizeConfigPayload(config: PartyConfig, seeded = true): Record<strin
     ticketTitle: clip(config.ticketTitle, 150) || DEFAULT_PARTY_CONFIG.ticketTitle,
     registrationSubtitle:
       clip(config.registrationSubtitle, 300) || DEFAULT_PARTY_CONFIG.registrationSubtitle,
-    themeColor: clip(config.themeColor, 50) || 'obsidian-gold',
+    themeColor: clip(config.themeColor, 50) || 'vibrant-party',
     isRegistrationOpen: Boolean(config.isRegistrationOpen),
     blockedGroups: blocked,
     autoBlockPreviousWinners: Boolean(config.autoBlockPreviousWinners),
     isVipTriggerActive: Boolean(config.isVipTriggerActive),
     vipActivePrizeId: clip(config.vipActivePrizeId, 128),
+    claimCountdownEndAt: clip(config.claimCountdownEndAt, 64),
+    claimCountdownWinnerId: clip(config.claimCountdownWinnerId, 128),
+    claimCountdownPrizeId: clip(config.claimCountdownPrizeId, 128),
     seeded,
     updatedAt: new Date().toISOString(),
   };
@@ -274,6 +301,32 @@ export const FirestoreService = {
     } catch {
       // ignore
     }
+  },
+
+  subscribeLocalSync(onSync: (area: SyncArea) => void): () => void {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.area) {
+        onSync(e.data.area as SyncArea);
+      }
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === CACHE_KEYS.CONFIG) onSync('config');
+      else if (e.key === CACHE_KEYS.ROSTER) onSync('roster');
+      else if (e.key === CACHE_KEYS.PRIZES) onSync('prizes');
+      else if (e.key === CACHE_KEYS.REGISTRATIONS) onSync('registrations');
+      else if (e.key === CACHE_KEYS.LUCKY_WINNERS) onSync('winners');
+    };
+    syncChannel?.addEventListener('message', handleMessage);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorage);
+    }
+    return () => {
+      syncChannel?.removeEventListener('message', handleMessage);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('storage', handleStorage);
+      }
+    };
   },
 
   async ensureInitialSeed(): Promise<void> {
@@ -512,6 +565,7 @@ export const FirestoreService = {
 
   async setConfig(config: PartyConfig): Promise<void> {
     writeCache(CACHE_KEYS.CONFIG, config);
+    emitLocalSync('config');
     const path = `${COLLECTIONS.CONFIG}/${CONFIG_DOC_ID}`;
     try {
       await setDoc(doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID), sanitizeConfigPayload(config, true));
@@ -520,12 +574,16 @@ export const FirestoreService = {
         console.warn('Saved config locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.WRITE, path);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      }
+      console.warn('setConfig warning:', error);
     }
   },
 
   async setRoster(roster: EmployeeRoster[]): Promise<void> {
     writeCache(CACHE_KEYS.ROSTER, roster);
+    emitLocalSync('roster');
     try {
       const existingSnap = await getDocs(collection(db, COLLECTIONS.ROSTER));
       const newMap = new Map<string, EmployeeRoster>();
@@ -551,7 +609,10 @@ export const FirestoreService = {
         console.warn('Saved roster locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.ROSTER);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.ROSTER);
+      }
+      console.warn('setRoster warning:', error);
     }
   },
 
@@ -564,6 +625,7 @@ export const FirestoreService = {
     this.setMyRegistrationId(docId);
     const cached = this.getCachedRegistrations().filter((r) => r.id !== docId);
     writeCache(CACHE_KEYS.REGISTRATIONS, [saved, ...cached]);
+    emitLocalSync('registrations');
 
     try {
       await setDoc(doc(db, COLLECTIONS.REGISTRATIONS, docId), payload);
@@ -573,12 +635,17 @@ export const FirestoreService = {
         console.warn('Registration cached locally (Firestore offline).');
         return saved;
       }
-      handleFirestoreError(error, OperationType.WRITE, path);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      }
+      console.warn('addRegistration warning:', error);
+      return saved;
     }
   },
 
   async setPrizes(prizes: Prize[]): Promise<void> {
     writeCache(CACHE_KEYS.PRIZES, prizes);
+    emitLocalSync('prizes');
     try {
       const existingSnap = await getDocs(collection(db, COLLECTIONS.PRIZES));
       const newMap = new Map<string, { prize: Prize; index: number }>();
@@ -604,7 +671,10 @@ export const FirestoreService = {
         console.warn('Saved prizes locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.PRIZES);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.PRIZES);
+      }
+      console.warn('setPrizes warning:', error);
     }
   },
 
@@ -615,20 +685,61 @@ export const FirestoreService = {
     const prizeRef = doc(db, COLLECTIONS.PRIZES, prizeId);
     const configRef = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
 
+    const prevWinners = this.getCachedLuckyWinners();
+    const prevPrizes = this.getCachedPrizes();
+
+    // Defensive check against duplicate winner or out-of-stock prize
+    const alreadyWon = prevWinners.some(
+      (w) => w.employeeId.toUpperCase() === record.employeeId.toUpperCase()
+    );
+    if (alreadyWon) {
+      throw new Error('DUPLICATE_WINNER');
+    }
+
+    const cachedTargetPrize = prevPrizes.find((p) => toSafeDocId('', p.id) === prizeId);
+    if (cachedTargetPrize && cachedTargetPrize.remaining <= 0) {
+      throw new Error('PRIZE_OUT_OF_STOCK');
+    }
+
+    const clearedCountdownConfig: PartyConfig = {
+      ...currentConfig,
+      isVipTriggerActive: false,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
+    };
+
     // Update local cache optimistically
     const normalizedWinner: LuckyDrawRecord = { ...record, id: winnerId, prizeId };
-    const cachedWinners = this.getCachedLuckyWinners().filter((w) => w.id !== winnerId);
+    const cachedWinners = prevWinners.filter((w) => w.id !== winnerId);
+    const cachedPrizes = prevPrizes.map((p) =>
+      toSafeDocId('', p.id) === prizeId ? { ...p, remaining: Math.max(0, p.remaining - 1) } : p
+    );
     writeCache(CACHE_KEYS.LUCKY_WINNERS, [normalizedWinner, ...cachedWinners]);
-    writeCache(CACHE_KEYS.CONFIG, { ...currentConfig, isVipTriggerActive: false });
+    writeCache(CACHE_KEYS.PRIZES, cachedPrizes);
+    writeCache(CACHE_KEYS.CONFIG, clearedCountdownConfig);
+    emitLocalSync('all');
 
     try {
       await runTransaction(db, async (tx) => {
         const prizeSnap = await tx.get(prizeRef);
-        if (!prizeSnap.exists()) {
-          throw new Error('Prize does not exist');
+        const fallbackPrize =
+          cachedTargetPrize || INITIAL_PRIZES.find((p) => toSafeDocId('', p.id) === prizeId);
+
+        let prizeData: Prize & { sortOrder?: number };
+        if (prizeSnap.exists()) {
+          prizeData = prizeSnap.data() as Prize & { sortOrder?: number };
+        } else if (fallbackPrize) {
+          prizeData = { ...fallbackPrize, id: prizeId };
+        } else {
+          throw new Error('PRIZE_OUT_OF_STOCK');
         }
-        const prizeData = prizeSnap.data() as Prize & { sortOrder?: number };
-        const nextRemaining = Math.max(0, Math.floor(Number(prizeData.remaining) || 0) - 1);
+
+        const currentRem = Math.floor(Number(prizeData.remaining) || 0);
+        if (currentRem <= 0) {
+          throw new Error('PRIZE_OUT_OF_STOCK');
+        }
+        const nextRemaining = Math.max(0, currentRem - 1);
 
         tx.set(winnerRef, sanitizeWinnerPayload(normalizedWinner));
         tx.set(
@@ -642,23 +753,46 @@ export const FirestoreService = {
             prizeData.sortOrder ?? 0
           )
         );
-        tx.set(
-          configRef,
-          sanitizeConfigPayload(
-            {
-              ...currentConfig,
-              isVipTriggerActive: false,
-            },
-            true
-          )
-        );
+        tx.set(configRef, sanitizeConfigPayload(clearedCountdownConfig, true));
       });
     } catch (error) {
+      if (error instanceof Error && error.message === 'PRIZE_OUT_OF_STOCK') {
+        writeCache(CACHE_KEYS.LUCKY_WINNERS, prevWinners);
+        writeCache(CACHE_KEYS.PRIZES, prevPrizes);
+        writeCache(CACHE_KEYS.CONFIG, currentConfig);
+        emitLocalSync('all');
+        throw error;
+      }
       if (isOfflineOrNetworkError(error)) {
+        // Offline-safe fallback: queue writeBatch without tx.get so Firestore syncs once online
+        try {
+          const batch = writeBatch(db);
+          batch.set(winnerRef, sanitizeWinnerPayload(normalizedWinner));
+          if (cachedTargetPrize) {
+            batch.set(
+              prizeRef,
+              sanitizePrizePayload(
+                {
+                  ...cachedTargetPrize,
+                  id: prizeId,
+                  remaining: Math.max(0, cachedTargetPrize.remaining - 1),
+                },
+                0
+              )
+            );
+          }
+          batch.set(configRef, sanitizeConfigPayload(clearedCountdownConfig, true));
+          batch.commit().catch(() => {});
+        } catch {
+          // ignore offline queue failures
+        }
         console.warn('Lucky winner updated locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.LUCKY_WINNERS}/${winnerId}`);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.LUCKY_WINNERS}/${winnerId}`);
+      }
+      console.warn('addLuckyWinner warning:', error);
     }
   },
 
@@ -669,7 +803,14 @@ export const FirestoreService = {
     const prizeRef = doc(db, COLLECTIONS.PRIZES, prizeId);
 
     const cachedWinners = this.getCachedLuckyWinners().filter((w) => w.id !== winnerId);
+    const cachedPrizes = this.getCachedPrizes().map((p) =>
+      toSafeDocId('', p.id) === prizeId
+        ? { ...p, remaining: Math.min(p.quantity, p.remaining + 1) }
+        : p
+    );
     writeCache(CACHE_KEYS.LUCKY_WINNERS, cachedWinners);
+    writeCache(CACHE_KEYS.PRIZES, cachedPrizes);
+    emitLocalSync('all');
 
     try {
       await runTransaction(db, async (tx) => {
@@ -695,10 +836,130 @@ export const FirestoreService = {
       });
     } catch (error) {
       if (isOfflineOrNetworkError(error)) {
+        try {
+          const batch = writeBatch(db);
+          batch.delete(winnerRef);
+          const restoredPrize = cachedPrizes.find((p) => toSafeDocId('', p.id) === prizeId);
+          if (restoredPrize) {
+            batch.set(prizeRef, sanitizePrizePayload({ ...restoredPrize, id: prizeId }, 0));
+          }
+          batch.commit().catch(() => {});
+        } catch {
+          // ignore
+        }
         console.warn('Winner removal cached locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.LUCKY_WINNERS}/${winnerId}`);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.LUCKY_WINNERS}/${winnerId}`);
+      }
+      console.warn('deleteLuckyWinner warning:', error);
+    }
+  },
+
+  async forfeitWinnerAndBlock(
+    record: LuckyDrawRecord,
+    roster: EmployeeRoster[],
+    registrations: AttendeeRegistration[],
+    currentConfig: PartyConfig
+  ): Promise<void> {
+    const winnerId = toSafeDocId('', record.id);
+    const prizeId = toSafeDocId('', record.prizeId);
+    const targetEmpIdUpper = record.employeeId.trim().toUpperCase();
+
+    const winnerRef = doc(db, COLLECTIONS.LUCKY_WINNERS, winnerId);
+    const prizeRef = doc(db, COLLECTIONS.PRIZES, prizeId);
+    const configRef = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
+
+    // 1. Update local caches immediately (remove winner, restore prize stock, block employee in roster + registrations, clear countdown)
+    const nextWinners = this.getCachedLuckyWinners().filter((w) => w.id !== winnerId);
+    const nextPrizes = this.getCachedPrizes().map((p) =>
+      toSafeDocId('', p.id) === prizeId
+        ? { ...p, remaining: Math.min(p.quantity, p.remaining + 1) }
+        : p
+    );
+
+    const matchingRegs = registrations.filter(
+      (r) => r.employeeId.trim().toUpperCase() === targetEmpIdUpper
+    );
+    const nextRegs = (this.getCachedRegistrations().length > 0
+      ? this.getCachedRegistrations()
+      : registrations
+    ).map((r) =>
+      r.employeeId.trim().toUpperCase() === targetEmpIdUpper
+        ? { ...r, isBlockedFromDraw: true }
+        : r
+    );
+
+    const nextRoster = (this.getCachedRoster().length > 0 ? this.getCachedRoster() : roster).map(
+      (emp) =>
+        emp.id.trim().toUpperCase() === targetEmpIdUpper
+          ? { ...emp, isBlockedFromDraw: true }
+          : emp
+    );
+
+    const nextConfig: PartyConfig = {
+      ...currentConfig,
+      vipActivePrizeId: prizeId,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
+    };
+
+    writeCache(CACHE_KEYS.LUCKY_WINNERS, nextWinners);
+    writeCache(CACHE_KEYS.PRIZES, nextPrizes);
+    writeCache(CACHE_KEYS.REGISTRATIONS, nextRegs);
+    writeCache(CACHE_KEYS.ROSTER, nextRoster);
+    writeCache(CACHE_KEYS.CONFIG, nextConfig);
+    emitLocalSync('all');
+
+    try {
+      const batch = writeBatch(db);
+      batch.delete(winnerRef);
+
+      const restoredPrize = nextPrizes.find((p) => toSafeDocId('', p.id) === prizeId);
+      if (restoredPrize) {
+        batch.set(prizeRef, sanitizePrizePayload({ ...restoredPrize, id: prizeId }, 0));
+      }
+
+      // Block all matching registration docs
+      const regDocIds = new Set<string>([toSafeDocId('REG_', targetEmpIdUpper)]);
+      matchingRegs.forEach((r) => {
+        if (r.id) regDocIds.add(toSafeDocId('', r.id));
+      });
+      regDocIds.forEach((rDocId) => {
+        const regData = matchingRegs[0];
+        if (regData) {
+          batch.set(
+            doc(db, COLLECTIONS.REGISTRATIONS, rDocId),
+            sanitizeRegistrationPayload({ ...regData, isBlockedFromDraw: true }, rDocId)
+          );
+        }
+      });
+
+      // Block matching roster doc
+      const matchedRoster = nextRoster.find(
+        (emp) => emp.id.trim().toUpperCase() === targetEmpIdUpper
+      );
+      if (matchedRoster) {
+        const rosterDocId = toSafeDocId('', matchedRoster.id);
+        batch.set(
+          doc(db, COLLECTIONS.ROSTER, rosterDocId),
+          sanitizeRosterPayload({ ...matchedRoster, isBlockedFromDraw: true })
+        );
+      }
+
+      batch.set(configRef, sanitizeConfigPayload(nextConfig, true));
+      await batch.commit();
+    } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Forfeit & block cached locally (Firestore offline).');
+        return;
+      }
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.LUCKY_WINNERS}/${winnerId}`);
+      }
+      console.warn('forfeitWinnerAndBlock warning:', error);
     }
   },
 
@@ -708,6 +969,7 @@ export const FirestoreService = {
       CACHE_KEYS.PRIZES,
       prizes.map((p) => ({ ...p, remaining: p.quantity }))
     );
+    emitLocalSync('all');
 
     try {
       await commitBatchedDeletes(COLLECTIONS.LUCKY_WINNERS);
@@ -725,14 +987,22 @@ export const FirestoreService = {
         console.warn('Reset lucky draws cached locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.LUCKY_WINNERS);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.LUCKY_WINNERS);
+      }
+      console.warn('resetAllLuckyDraws warning:', error);
     }
   },
 
   async clearRegistrations(prizes: Prize[]): Promise<void> {
     writeCache(CACHE_KEYS.REGISTRATIONS, []);
     writeCache(CACHE_KEYS.LUCKY_WINNERS, []);
+    writeCache(
+      CACHE_KEYS.PRIZES,
+      prizes.map((p) => ({ ...p, remaining: p.quantity }))
+    );
     this.clearMyRegistrationId();
+    emitLocalSync('all');
 
     try {
       await commitBatchedDeletes(COLLECTIONS.REGISTRATIONS);
@@ -752,7 +1022,10 @@ export const FirestoreService = {
         console.warn('Clear registrations cached locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.DELETE, COLLECTIONS.REGISTRATIONS);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.DELETE, COLLECTIONS.REGISTRATIONS);
+      }
+      console.warn('clearRegistrations warning:', error);
     }
   },
 
@@ -771,8 +1044,15 @@ export const FirestoreService = {
       ...newConfig,
       isRegistrationOpen: true,
       isVipTriggerActive: false,
+      claimCountdownEndAt: '',
+      claimCountdownWinnerId: '',
+      claimCountdownPrizeId: '',
     };
     writeCache(CACHE_KEYS.CONFIG, updatedConfig);
+    if (options.clearRoster) writeCache(CACHE_KEYS.ROSTER, []);
+    if (options.clearPrizes) writeCache(CACHE_KEYS.PRIZES, []);
+    else writeCache(CACHE_KEYS.PRIZES, prizes.map((p) => ({ ...p, remaining: p.quantity })));
+    emitLocalSync('all');
 
     try {
       await commitBatchedDeletes(COLLECTIONS.REGISTRATIONS);
@@ -804,7 +1084,10 @@ export const FirestoreService = {
         console.warn('Start new party cached locally (Firestore offline).');
         return;
       }
-      handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.CONFIG);
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.CONFIG);
+      }
+      console.warn('startNewParty warning:', error);
     }
   },
 };

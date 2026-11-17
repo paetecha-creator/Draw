@@ -18,6 +18,9 @@
         "autoBlockPreviousWinners": { "type": "boolean" },
         "isVipTriggerActive": { "type": "boolean" },
         "vipActivePrizeId": { "type": "string", "maxLength": 128 },
+        "claimCountdownEndAt": { "type": "string", "maxLength": 64 },
+        "claimCountdownWinnerId": { "type": "string", "maxLength": 128 },
+        "claimCountdownPrizeId": { "type": "string", "maxLength": 128 },
         "seeded": { "type": "boolean" },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },

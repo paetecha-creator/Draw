@@ -55,6 +55,9 @@ service cloud.firestore {
         'autoBlockPreviousWinners',
         'isVipTriggerActive',
         'vipActivePrizeId',
+        'claimCountdownEndAt',
+        'claimCountdownWinnerId',
+        'claimCountdownPrizeId',
         'seeded',
         'updatedAt'
       ]) &&
@@ -72,6 +75,9 @@ service cloud.firestore {
       data.autoBlockPreviousWinners is bool &&
       data.isVipTriggerActive is bool &&
       isOptionalString(data, 'vipActivePrizeId', 128) &&
+      isOptionalString(data, 'claimCountdownEndAt', 64) &&
+      isOptionalString(data, 'claimCountdownWinnerId', 128) &&
+      isOptionalString(data, 'claimCountdownPrizeId', 128) &&
       isOptionalBool(data, 'seeded') &&
       isOptionalString(data, 'updatedAt', 64);
     }
