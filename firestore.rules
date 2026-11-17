@@ -1,0 +1,255 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net - Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared Validation Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptionalBool(data, key) {
+      return !(key in data) || (data[key] is bool);
+    }
+
+    function isOptionalNumber(data, key) {
+      return !(key in data) || (data[key] is number);
+    }
+
+    // Entity Validators
+    function isValidPartyConfig(data) {
+      return data.keys().hasAll([
+        'eventName',
+        'themeColor',
+        'isRegistrationOpen',
+        'blockedGroups',
+        'autoBlockPreviousWinners',
+        'isVipTriggerActive'
+      ]) &&
+      data.keys().hasOnly([
+        'eventName',
+        'eventSubtitle',
+        'eventDate',
+        'eventVenue',
+        'eventContact',
+        'ticketTitle',
+        'registrationSubtitle',
+        'themeColor',
+        'isRegistrationOpen',
+        'blockedGroups',
+        'autoBlockPreviousWinners',
+        'isVipTriggerActive',
+        'vipActivePrizeId',
+        'seeded',
+        'updatedAt'
+      ]) &&
+      data.eventName is string && data.eventName.size() >= 1 && data.eventName.size() <= 200 &&
+      isOptionalString(data, 'eventSubtitle', 250) &&
+      isOptionalString(data, 'eventDate', 150) &&
+      isOptionalString(data, 'eventVenue', 250) &&
+      isOptionalString(data, 'eventContact', 200) &&
+      isOptionalString(data, 'ticketTitle', 150) &&
+      isOptionalString(data, 'registrationSubtitle', 300) &&
+      data.themeColor is string && data.themeColor.size() >= 1 && data.themeColor.size() <= 50 &&
+      data.isRegistrationOpen is bool &&
+      data.blockedGroups is list && data.blockedGroups.size() <= 50 &&
+      (data.blockedGroups.size() == 0 || (data.blockedGroups[0] is string && data.blockedGroups[0].size() <= 100)) &&
+      data.autoBlockPreviousWinners is bool &&
+      data.isVipTriggerActive is bool &&
+      isOptionalString(data, 'vipActivePrizeId', 128) &&
+      isOptionalBool(data, 'seeded') &&
+      isOptionalString(data, 'updatedAt', 64);
+    }
+
+    function isValidRoster(data) {
+      return data.keys().hasAll(['id', 'fullName', 'department', 'tableNumber']) &&
+      data.keys().hasOnly([
+        'id',
+        'fullName',
+        'nickname',
+        'department',
+        'tableNumber',
+        'groupRole',
+        'phone',
+        'isBlockedFromDraw'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+      data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 200 &&
+      isOptionalString(data, 'nickname', 100) &&
+      data.department is string && data.department.size() >= 1 && data.department.size() <= 150 &&
+      data.tableNumber is string && data.tableNumber.size() >= 1 && data.tableNumber.size() <= 150 &&
+      isOptionalString(data, 'groupRole', 100) &&
+      isOptionalString(data, 'phone', 40) &&
+      isOptionalBool(data, 'isBlockedFromDraw');
+    }
+
+    function isValidPrize(data) {
+      return data.keys().hasAll(['id', 'name', 'tier', 'quantity', 'remaining']) &&
+      data.keys().hasOnly([
+        'id',
+        'name',
+        'tier',
+        'quantity',
+        'remaining',
+        'sponsor',
+        'iconName',
+        'description',
+        'color',
+        'imageUrl',
+        'sortOrder'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
+      data.tier is string && data.tier.size() >= 1 && data.tier.size() <= 150 &&
+      data.quantity is int && data.quantity >= 1 && data.quantity <= 10000 &&
+      data.remaining is int && data.remaining >= 0 && data.remaining <= data.quantity &&
+      isOptionalString(data, 'sponsor', 200) &&
+      isOptionalString(data, 'iconName', 64) &&
+      isOptionalString(data, 'description', 400) &&
+      isOptionalString(data, 'color', 120) &&
+      isOptionalString(data, 'imageUrl', 450000) &&
+      isOptionalNumber(data, 'sortOrder');
+    }
+
+    function isValidRegistration(data) {
+      return data.keys().hasAll([
+        'id',
+        'employeeId',
+        'fullName',
+        'department',
+        'tableNumber',
+        'phone',
+        'selfieUrl',
+        'registeredAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'employeeId',
+        'fullName',
+        'nickname',
+        'department',
+        'tableNumber',
+        'phone',
+        'selfieUrl',
+        'registeredAt',
+        'dietaryOrNote',
+        'groupRole',
+        'isBlockedFromDraw'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+      data.employeeId is string && data.employeeId.size() >= 1 && data.employeeId.size() <= 128 &&
+      data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 200 &&
+      isOptionalString(data, 'nickname', 100) &&
+      data.department is string && data.department.size() >= 1 && data.department.size() <= 150 &&
+      data.tableNumber is string && data.tableNumber.size() >= 1 && data.tableNumber.size() <= 150 &&
+      data.phone is string && data.phone.size() >= 1 && data.phone.size() <= 40 &&
+      data.selfieUrl is string && data.selfieUrl.size() >= 1 && data.selfieUrl.size() <= 450000 &&
+      data.registeredAt is string && data.registeredAt.size() >= 1 && data.registeredAt.size() <= 64 &&
+      isOptionalString(data, 'dietaryOrNote', 300) &&
+      isOptionalString(data, 'groupRole', 100) &&
+      isOptionalBool(data, 'isBlockedFromDraw');
+    }
+
+    function isValidLuckyWinner(data) {
+      return data.keys().hasAll([
+        'id',
+        'prizeId',
+        'prizeName',
+        'prizeTier',
+        'employeeId',
+        'winnerName',
+        'department',
+        'tableNumber',
+        'wonAt',
+        'round'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'prizeId',
+        'prizeName',
+        'prizeTier',
+        'employeeId',
+        'winnerName',
+        'nickname',
+        'department',
+        'tableNumber',
+        'selfieUrl',
+        'prizeImageUrl',
+        'wonAt',
+        'round'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+      data.prizeId is string && data.prizeId.size() >= 1 && data.prizeId.size() <= 128 &&
+      data.prizeName is string && data.prizeName.size() >= 1 && data.prizeName.size() <= 200 &&
+      data.prizeTier is string && data.prizeTier.size() >= 1 && data.prizeTier.size() <= 150 &&
+      data.employeeId is string && data.employeeId.size() >= 1 && data.employeeId.size() <= 128 &&
+      data.winnerName is string && data.winnerName.size() >= 1 && data.winnerName.size() <= 200 &&
+      isOptionalString(data, 'nickname', 100) &&
+      data.department is string && data.department.size() >= 1 && data.department.size() <= 150 &&
+      data.tableNumber is string && data.tableNumber.size() >= 1 && data.tableNumber.size() <= 150 &&
+      isOptionalString(data, 'selfieUrl', 450000) &&
+      isOptionalString(data, 'prizeImageUrl', 450000) &&
+      data.wonAt is string && data.wonAt.size() >= 1 && data.wonAt.size() <= 64 &&
+      data.round is int && data.round >= 1 && data.round <= 10000;
+    }
+
+    // Health check document for boot testConnection()
+    match /test/{docId} {
+      allow get: if isValidId(docId);
+    }
+
+    // Event configuration (open event kiosk & executive portal)
+    match /config/{configId} {
+      allow get: if isValidId(configId);
+      allow create, update: if isValidId(configId) && isValidPartyConfig(incoming());
+    }
+
+    // Employee roster for table lookup & Excel sync
+    match /roster/{employeeDocId} {
+      allow get: if isValidId(employeeDocId);
+      allow list: if resource.data.id is string;
+      allow create, update: if isValidId(employeeDocId) && isValidRoster(incoming());
+      allow delete: if isValidId(employeeDocId);
+    }
+
+    // Lucky Draw prizes
+    match /prizes/{prizeId} {
+      allow get: if isValidId(prizeId);
+      allow list: if resource.data.id is string;
+      allow create, update: if isValidId(prizeId) && isValidPrize(incoming());
+      allow delete: if isValidId(prizeId);
+    }
+
+    // Checked-in attendees
+    match /registrations/{registrationId} {
+      allow get: if isValidId(registrationId);
+      allow list: if resource.data.employeeId is string;
+      allow create: if isValidId(registrationId) && isValidRegistration(incoming());
+      allow update: if isValidId(registrationId) && isValidRegistration(incoming()) && incoming().employeeId == existing().employeeId;
+      allow delete: if isValidId(registrationId);
+    }
+
+    // Live Lucky Draw winner records (no phone PII stored)
+    match /luckyWinners/{winnerId} {
+      allow get: if isValidId(winnerId);
+      allow list: if resource.data.round is int;
+      allow create: if isValidId(winnerId) && isValidLuckyWinner(incoming()) && exists(/databases/$(database)/documents/prizes/$(incoming().prizeId));
+      allow delete: if isValidId(winnerId);
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "entities": {
+    "PartyConfig": {
+      "title": "PartyConfig",
+      "description": "Global configuration for the party event, registration status, prize targeting, and VIP trigger.",
+      "type": "object",
+      "properties": {
+        "eventName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "eventSubtitle": { "type": "string", "maxLength": 250 },
+        "eventDate": { "type": "string", "maxLength": 150 },
+        "eventVenue": { "type": "string", "maxLength": 250 },
+        "eventContact": { "type": "string", "maxLength": 200 },
+        "ticketTitle": { "type": "string", "maxLength": 150 },
+        "registrationSubtitle": { "type": "string", "maxLength": 300 },
+        "themeColor": { "type": "string", "maxLength": 50 },
+        "isRegistrationOpen": { "type": "boolean" },
+        "blockedGroups": { "type": "array" },
+        "autoBlockPreviousWinners": { "type": "boolean" },
+        "isVipTriggerActive": { "type": "boolean" },
+        "vipActivePrizeId": { "type": "string", "maxLength": 128 },
+        "seeded": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["eventName", "themeColor", "isRegistrationOpen", "blockedGroups", "autoBlockPreviousWinners", "isVipTriggerActive"]
+    },
+    "EmployeeRoster": {
+      "title": "EmployeeRoster",
+      "description": "Pre-imported employee roster with table assignments and group roles.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "nickname": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "tableNumber": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "groupRole": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "isBlockedFromDraw": { "type": "boolean" }
+      },
+      "required": ["id", "fullName", "department", "tableNumber"]
+    },
+    "Prize": {
+      "title": "Prize",
+      "description": "Lucky Draw prize item with remaining inventory and optional sample image.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "tier": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "quantity": { "type": "number" },
+        "remaining": { "type": "number" },
+        "sponsor": { "type": "string", "maxLength": 200 },
+        "iconName": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 400 },
+        "color": { "type": "string", "maxLength": 120 },
+        "imageUrl": { "type": "string", "maxLength": 450000 },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["id", "name", "tier", "quantity", "remaining"]
+    },
+    "AttendeeRegistration": {
+      "title": "AttendeeRegistration",
+      "description": "Checked-in attendee registration with employee ID, phone number, table number, and selfie photo.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "employeeId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "nickname": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "tableNumber": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "phone": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "selfieUrl": { "type": "string", "minLength": 1, "maxLength": 450000 },
+        "registeredAt": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "dietaryOrNote": { "type": "string", "maxLength": 300 },
+        "groupRole": { "type": "string", "maxLength": 100 },
+        "isBlockedFromDraw": { "type": "boolean" }
+      },
+      "required": ["id", "employeeId", "fullName", "department", "tableNumber", "phone", "selfieUrl", "registeredAt"]
+    },
+    "LuckyDrawRecord": {
+      "title": "LuckyDrawRecord",
+      "description": "Public live Lucky Draw winner record displayed on stage and attendee phones.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "prizeId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "prizeName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "prizeTier": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "employeeId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "winnerName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "nickname": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "tableNumber": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "selfieUrl": { "type": "string", "maxLength": 450000 },
+        "prizeImageUrl": { "type": "string", "maxLength": 450000 },
+        "wonAt": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "round": { "type": "number" }
+      },
+      "required": ["id", "prizeId", "prizeName", "prizeTier", "employeeId", "winnerName", "department", "tableNumber", "wonAt", "round"]
+    }
+  },
+  "firestore": {
+    "/config/{configId}": {
+      "schema": { "$ref": "#/entities/PartyConfig" },
+      "description": "Main party event configuration document (doc id: main)."
+    },
+    "/roster/{employeeDocId}": {
+      "schema": { "$ref": "#/entities/EmployeeRoster" },
+      "description": "Imported Excel employee roster for table lookup."
+    },
+    "/prizes/{prizeId}": {
+      "schema": { "$ref": "#/entities/Prize" },
+      "description": "Lucky Draw prize inventory and sample images."
+    },
+    "/registrations/{registrationId}": {
+      "schema": { "$ref": "#/entities/AttendeeRegistration" },
+      "description": "Event check-in registrations with phone numbers and selfie verification."
+    },
+    "/luckyWinners/{winnerId}": {
+      "schema": { "$ref": "#/entities/LuckyDrawRecord" },
+      "description": "Lucky Draw winner records broadcast live to all screens."
+    }
+  }
+}
