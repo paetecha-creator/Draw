@@ -25,6 +25,9 @@ export function parseEmployeeExcel(fileBuffer: ArrayBuffer): EmployeeRoster[] {
   rawRows.forEach((row, index) => {
     let id = '';
     let fullName = '';
+    let prefixTitle = '';
+    let firstName = '';
+    let lastName = '';
     let nickname = '';
     let department = '';
     let tableNumber = '';
@@ -46,6 +49,26 @@ export function parseEmployeeExcel(fileBuffer: ArrayBuffer): EmployeeRoster[] {
       ) {
         if (!id) id = strVal;
       } else if (
+        norm === 'sex' ||
+        norm === 'title' ||
+        norm.includes('คำนำหน้า') ||
+        norm.includes('prefix')
+      ) {
+        if (!prefixTitle) prefixTitle = strVal;
+      } else if (
+        norm === 'ชื่อ' ||
+        norm === 'firstname' ||
+        norm === 'fname'
+      ) {
+        if (!firstName) firstName = strVal;
+      } else if (
+        norm.includes('นามสกุล') ||
+        norm === 'lastname' ||
+        norm === 'lname' ||
+        norm === 'surname'
+      ) {
+        if (!lastName) lastName = strVal;
+      } else if (
         norm.includes('ชื่อนามสกุล') ||
         norm.includes('fullname') ||
         norm.includes('name') ||
@@ -56,6 +79,7 @@ export function parseEmployeeExcel(fileBuffer: ArrayBuffer): EmployeeRoster[] {
       } else if (norm.includes('ชื่อเล่น') || norm.includes('nickname') || norm.includes('nick')) {
         if (!nickname) nickname = strVal;
       } else if (
+        norm.includes('incharge') ||
         norm.includes('แผนก') ||
         norm.includes('ฝ่าย') ||
         norm.includes('สังกัด') ||
@@ -90,6 +114,10 @@ export function parseEmployeeExcel(fileBuffer: ArrayBuffer): EmployeeRoster[] {
         const lower = strVal.toLowerCase();
         isBlockedFromDraw = lower === 'true' || lower === 'yes' || lower === '1' || strVal === 'ใช่' || strVal === 'บล็อค';
       }
+    }
+
+    if (!fullName && (firstName || lastName)) {
+      fullName = [prefixTitle, firstName, lastName].filter(Boolean).join(' ').trim();
     }
 
     // Fallbacks if no header matched directly

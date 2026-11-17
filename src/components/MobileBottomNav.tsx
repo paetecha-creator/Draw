@@ -1,6 +1,7 @@
 import React from 'react';
 import { UserCheck, Ticket, Trophy, Shield } from 'lucide-react';
 import { soundFX } from '../utils/audio';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 interface MobileBottomNavProps {
   currentView: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip';
@@ -16,8 +17,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   isAdminLoggedIn,
   hasMyTicket,
 }) => {
+  const { t } = usePreferences();
+
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800 pb-safe shadow-2xl">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 pb-safe shadow-2xl transition-colors">
       <div className={`grid ${isAdminLoggedIn ? 'grid-cols-4' : 'grid-cols-3'} items-center h-14 px-1`}>
         {/* Tab 1: Register */}
         <button
@@ -27,11 +30,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             onChangeView('register');
           }}
           className={`flex flex-col items-center justify-center min-h-[44px] transition cursor-pointer ${
-            currentView === 'register' ? 'text-amber-400 font-semibold' : 'text-zinc-500 hover:text-zinc-300'
+            currentView === 'register'
+              ? 'text-amber-600 dark:text-amber-400 font-semibold'
+              : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
           }`}
         >
           <UserCheck className="w-5 h-5" />
-          <span className="text-[10px] font-medium mt-0.5 leading-none">ลงทะเบียน</span>
+          <span className="text-[10px] font-medium mt-0.5 leading-none">
+            {t('ลงทะเบียน', 'Check-in')}
+          </span>
         </button>
 
         {/* Tab 2: My Pass */}
@@ -46,12 +53,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             }
           }}
           className={`flex flex-col items-center justify-center min-h-[44px] transition relative cursor-pointer ${
-            currentView === 'ticket' ? 'text-amber-400 font-semibold' : 'text-zinc-500 hover:text-zinc-300'
+            currentView === 'ticket'
+              ? 'text-amber-600 dark:text-amber-400 font-semibold'
+              : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
           }`}
         >
           <Ticket className="w-5 h-5" />
           <span className="text-[10px] font-medium mt-0.5 leading-none">
-            {hasMyTicket ? 'บัตรของฉัน' : 'บัตรเข้างาน'}
+            {hasMyTicket ? t('บัตรของฉัน', 'My Pass') : t('บัตรเข้างาน', 'Pass')}
           </span>
         </button>
 
@@ -63,7 +72,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             onChangeView('livedraw');
           }}
           className={`flex flex-col items-center justify-center min-h-[44px] transition relative cursor-pointer ${
-            currentView === 'livedraw' ? 'text-amber-400 font-semibold' : 'text-zinc-500 hover:text-zinc-300'
+            currentView === 'livedraw'
+              ? 'text-amber-600 dark:text-amber-400 font-semibold'
+              : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
           }`}
         >
           <Trophy className="w-5 h-5" />
@@ -79,11 +90,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               onChangeView('admin');
             }}
             className={`flex flex-col items-center justify-center min-h-[44px] transition cursor-pointer ${
-              currentView === 'admin' ? 'text-amber-400 font-semibold' : 'text-zinc-500 hover:text-zinc-300'
+              currentView === 'admin'
+                ? 'text-amber-600 dark:text-amber-400 font-semibold'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
             }`}
           >
             <Shield className="w-5 h-5" />
-            <span className="text-[10px] font-medium mt-0.5 leading-none">แดชบอร์ด</span>
+            <span className="text-[10px] font-medium mt-0.5 leading-none">
+              {t('แดชบอร์ด', 'Admin')}
+            </span>
           </button>
         )}
       </div>

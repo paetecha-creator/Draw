@@ -53,6 +53,7 @@ import {
 import { soundFX } from '../utils/audio';
 import { PrizeManagerModal } from './PrizeManagerModal';
 import { NumpadPinModal } from './NumpadPinModal';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 interface AdminDashboardProps {
   roster: EmployeeRoster[];
@@ -91,6 +92,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenVipView,
   onSwitchToUserView,
 }) => {
+  const { lang, t } = usePreferences();
   // Navigation tabs inside admin
   const [activeTab, setActiveTab] = useState<'overview' | 'roster' | 'prizes' | 'luckydraw' | 'history' | 'settings'>('luckydraw');
 
@@ -158,7 +160,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     soundFX.playCelebrationChime();
     onUpdateConfig({
       ...config,
-      eventName: settingsName.trim() || 'งานเลี้ยงสังสรรค์ (Party Celebration)',
+      eventName: settingsName.trim() || t('งานเลี้ยงสังสรรค์ (Party Celebration)', 'Party Celebration Event'),
       eventSubtitle: settingsSubtitle.trim(),
       eventDate: settingsDate.trim(),
       eventVenue: settingsVenue.trim(),
@@ -167,7 +169,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       registrationSubtitle:
         settingsRegSubtitle.trim() || 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อยืนยันตัวตน',
     });
-    setSettingsSavedNotice('บันทึกรายละเอียดงานเลี้ยงสำเร็จแล้ว ข้อมูลจะอัปเดตทุกหน้าจอทันที');
+    setSettingsSavedNotice(
+      t(
+        'บันทึกรายละเอียดงานเลี้ยงสำเร็จแล้ว ข้อมูลจะอัปเดตทุกหน้าจอทันที',
+        'Event settings saved. All screens have been updated in real time.'
+      )
+    );
     setTimeout(() => setSettingsSavedNotice(null), 4000);
   };
 
@@ -187,12 +194,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleConfirmClearRegistrations = () => {
-    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลผู้ลงทะเบียนและประวัติการสุ่มรางวัลทั้งหมดสำหรับงานนี้? (รายชื่อพนักงานใน Excel และของรางวัลจะยังคงอยู่)')) {
+    if (
+      confirm(
+        t(
+          'คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลผู้ลงทะเบียนและประวัติการสุ่มรางวัลทั้งหมดสำหรับงานนี้? (รายชื่อพนักงานใน Excel และของรางวัลจะยังคงอยู่)',
+          'Are you sure you want to clear all registrations and Lucky Draw history for this event? (Employee Excel roster and prizes will be preserved)'
+        )
+      )
+    ) {
       soundFX.playClick();
       if (onClearRegistrations) {
         onClearRegistrations();
       }
-      setSettingsSavedNotice('ล้างข้อมูลผู้ลงทะเบียนและประวัติ Lucky Draw เรียบร้อยแล้ว');
+      setSettingsSavedNotice(
+        t(
+          'ล้างข้อมูลผู้ลงทะเบียนและประวัติ Lucky Draw เรียบร้อยแล้ว',
+          'Registrations and Lucky Draw history have been cleared.'
+        )
+      );
       setTimeout(() => setSettingsSavedNotice(null), 4000);
     }
   };
@@ -202,7 +221,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (onStartNewParty) {
       onStartNewParty(
         {
-          eventName: newPartyName.trim() || settingsName.trim() || 'งานเลี้ยงสังสรรค์ (Party Celebration)',
+          eventName: newPartyName.trim() || settingsName.trim() || 'Party Celebration',
           eventSubtitle: settingsSubtitle.trim(),
           eventDate: settingsDate.trim(),
           eventVenue: settingsVenue.trim(),
@@ -220,7 +239,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       );
     }
     setIsNewPartyModalOpen(false);
-    setSettingsSavedNotice('เริ่มต้นงานเลี้ยงใหม่เรียบร้อยแล้ว ระบบเปิดรับลงทะเบียนใหม่พร้อมใช้งาน');
+    setSettingsSavedNotice(
+      t(
+        'เริ่มต้นงานเลี้ยงใหม่เรียบร้อยแล้ว ระบบเปิดรับลงทะเบียนใหม่พร้อมใช้งาน',
+        'New event started! Registration is now open and ready.'
+      )
+    );
     setTimeout(() => setSettingsSavedNotice(null), 4000);
   };
 
@@ -283,20 +307,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const newRoster = parseEmployeeExcel(buffer);
 
       if (newRoster.length === 0) {
-        throw new Error('ไม่พบข้อมูลพนักงานที่ถูกต้องในไฟล์');
+        throw new Error(t('ไม่พบข้อมูลพนักงานที่ถูกต้องในไฟล์', 'No valid employee rows found in the file'));
       }
 
       onUpdateRoster(newRoster);
       soundFX.playCelebrationChime();
       setExcelImportMessage({
         type: 'success',
-        text: `นำเข้าข้อมูลพนักงานสำเร็จจำนวน ${newRoster.length} รายการเรียบร้อยแล้ว`,
+        text: t(
+          `นำเข้าข้อมูลพนักงานสำเร็จจำนวน ${newRoster.length} รายการเรียบร้อยแล้ว`,
+          `Successfully imported ${newRoster.length} employee records`
+        ),
       });
     } catch (err: unknown) {
       console.error(err);
       setExcelImportMessage({
         type: 'error',
-        text: err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการอ่านไฟล์ Excel',
+        text:
+          err instanceof Error
+            ? err.message
+            : t('เกิดข้อผิดพลาดในการอ่านไฟล์ Excel', 'Error reading the Excel file'),
       });
     } finally {
       setExcelImportLoading(false);
@@ -404,17 +434,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const executeDraw = (targetPrize: Prize) => {
     if (!targetPrize) {
-      alert('กรุณาเลือกรางวัลที่จะทำการสุ่มจับ');
+      alert(t('กรุณาเลือกรางวัลที่จะทำการสุ่มจับ', 'Please select a prize to draw.'));
       return;
     }
 
     if (targetPrize.remaining <= 0) {
-      alert(`รางวัล "${targetPrize.name}" ถูกแจกครบตามจำนวนแล้ว`);
+      alert(
+        t(
+          `รางวัล "${targetPrize.name}" ถูกแจกครบตามจำนวนแล้ว`,
+          `Prize "${targetPrize.name}" has no remaining stock.`
+        )
+      );
       return;
     }
 
     if (eligibleCandidates.length === 0) {
-      alert('ไม่มีผู้มีสิทธิ์ลุ้นรางวัลที่ตรงตามเงื่อนไข (อาจแจกครบทุกคนแล้ว หรือติดเงื่อนไขการบล็อค)');
+      alert(
+        t(
+          'ไม่มีผู้มีสิทธิ์ลุ้นรางวัลที่ตรงตามเงื่อนไข (อาจแจกครบทุกคนแล้ว หรือติดเงื่อนไขการบล็อค)',
+          'No eligible candidates match the rules (everyone may have won or is blocked).'
+        )
+      );
       return;
     }
 
@@ -474,11 +514,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-16">
-      {/* Top Admin Control Bar - Dark Theme */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+      {/* Top Admin Control Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-md dark:shadow-xl">
         <div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-            <span className="font-semibold text-amber-400">Admin Console</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="font-semibold text-amber-600 dark:text-amber-400">Admin Console</span>
             <span aria-hidden="true">·</span>
             {isEditingEventName ? (
               <div className="flex items-center gap-1.5">
@@ -486,8 +526,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   type="text"
                   value={tempEventName}
                   onChange={(e) => setTempEventName(e.target.value)}
-                  placeholder="ระบุชื่องานเลี้ยง..."
-                  className="px-2.5 py-1 text-xs font-semibold bg-zinc-950 border border-amber-400/60 rounded-lg text-zinc-100 focus:outline-none"
+                  placeholder={t('ระบุชื่องานเลี้ยง...', 'Enter event name...')}
+                  className="px-2.5 py-1 text-xs font-semibold bg-zinc-50 dark:bg-zinc-950 border border-amber-500/60 dark:border-amber-400/60 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none"
                   autoFocus
                 />
                 <button
@@ -503,7 +543,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   }}
                   className="px-2.5 py-1 text-[11px] font-bold bg-amber-400 text-zinc-950 rounded-lg hover:bg-amber-300 cursor-pointer"
                 >
-                  บันทึก
+                  {t('บันทึก', 'Save')}
                 </button>
                 <button
                   type="button"
@@ -511,13 +551,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     setTempEventName(config.eventName);
                     setIsEditingEventName(false);
                   }}
-                  className="px-2 py-1 text-[11px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                  className="px-2 py-1 text-[11px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
                 >
-                  ยกเลิก
+                  {t('ยกเลิก', 'Cancel')}
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+              <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 font-medium">
                 <span>{config.eventName}</span>
                 <button
                   type="button"
@@ -525,16 +565,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     setTempEventName(config.eventName);
                     setIsEditingEventName(true);
                   }}
-                  className="text-amber-400 hover:text-amber-300 p-1 rounded cursor-pointer"
-                  title="เปลี่ยนชื่องานเลี้ยง"
+                  className="text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 p-1 rounded cursor-pointer"
+                  title={t('เปลี่ยนชื่องานเลี้ยง', 'Edit event name')}
                 >
                   <Edit className="w-3 h-3" />
                 </button>
               </div>
             )}
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-zinc-100 mt-1">
-            แดชบอร์ดบริหารจัดการงานเลี้ยง &amp; Lucky Draw
+          <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">
+            {t('แดชบอร์ดบริหารจัดการงานเลี้ยง & Lucky Draw', 'Event Management & Lucky Draw Dashboard')}
           </h2>
         </div>
 
@@ -543,10 +583,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             type="button"
             onClick={handleToggleSound}
-            className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-zinc-950 text-zinc-200 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center transition cursor-pointer"
-            title={soundMuted ? 'เปิดเสียง' : 'ปิดเสียง'}
+            className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center transition cursor-pointer"
+            title={soundMuted ? t('เปิดเสียง', 'Unmute') : t('ปิดเสียง', 'Mute')}
           >
-            {soundMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
+            {soundMuted ? <VolumeX className="w-4 h-4 text-rose-500 dark:text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
           </button>
 
           <button
@@ -554,19 +594,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onClick={handleToggleRegistration}
             className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition active:scale-95 cursor-pointer border ${
               config.isRegistrationOpen
-                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
-                : 'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:bg-rose-500/25'
             }`}
           >
             {config.isRegistrationOpen ? (
               <>
-                <ToggleRight className="w-5 h-5 text-emerald-400" />
-                <span>สถานะ: เปิดรับลงทะเบียน</span>
+                <ToggleRight className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <span>{t('สถานะ: เปิดรับลงทะเบียน', 'Status: Check-in Open')}</span>
               </>
             ) : (
               <>
-                <ToggleLeft className="w-5 h-5 text-rose-400" />
-                <span>สถานะ: ปิดระบบแล้ว</span>
+                <ToggleLeft className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                <span>{t('สถานะ: ปิดระบบแล้ว', 'Status: Check-in Closed')}</span>
               </>
             )}
           </button>
@@ -578,11 +618,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 soundFX.playClick();
                 onSwitchToUserView();
               }}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold border border-zinc-800 flex items-center gap-1.5 transition cursor-pointer"
-              title="สลับไปดูหน้าจอลงทะเบียน / บัตรเข้างาน / ผลรางวัลของผู้ร่วมงาน"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold border border-zinc-200 dark:border-zinc-800 flex items-center gap-1.5 transition cursor-pointer"
+              title={t('สลับไปดูหน้าจอลงทะเบียน / บัตรเข้างาน / ผลรางวัลของผู้ร่วมงาน', 'Preview attendee screens')}
             >
-              <Eye className="w-3.5 h-3.5 text-amber-400" />
-              <span>ดูหน้าจอผู้ร่วมงาน</span>
+              <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>{t('ดูหน้าจอผู้ร่วมงาน', 'Attendee View')}</span>
             </button>
           )}
 
@@ -592,71 +632,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               soundFX.playClick();
               onLogout();
             }}
-            className="min-h-[44px] px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 flex items-center gap-1.5 transition cursor-pointer"
+            className="min-h-[44px] px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-semibold border border-zinc-300 dark:border-zinc-700 flex items-center gap-1.5 transition cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>ออกจากระบบ</span>
+            <span>{t('ออกจากระบบ', 'Log Out')}</span>
           </button>
         </div>
       </div>
 
-      {/* KPI METRIC CARDS - Dark Obsidian Cards */}
+      {/* KPI METRIC CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-semibold mb-1">
-            <span>รายชื่อในไฟล์ Excel</span>
-            <Users className="w-4 h-4 text-zinc-400" />
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 text-xs font-semibold mb-1">
+            <span>{t('รายชื่อในไฟล์ Excel', 'Excel Roster')}</span>
+            <Users className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
           </div>
-          <div className="text-2xl font-bold text-zinc-100 font-mono tabular-nums">
-            {roster.length} <span className="text-xs font-normal text-zinc-400 font-sans">คน</span>
-          </div>
-          <div className="text-[11px] text-zinc-500 mt-1">
-            ฐานข้อมูลจัดโต๊ะพนักงาน
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-          <div className="flex items-center justify-between text-emerald-400 text-xs font-semibold mb-1">
-            <span>ลงทะเบียนเข้างานแล้ว</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-2xl font-bold text-emerald-300 font-mono tabular-nums">
-            {registrations.length} <span className="text-xs font-normal text-zinc-400 font-sans">คน</span>
-          </div>
-          <div className="text-[11px] text-zinc-500 mt-1 font-mono tabular-nums">
-            คิดเป็น {roster.length > 0 ? Math.round((registrations.length / roster.length) * 100) : 0}% ของทั้งหมด
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-          <div className="flex items-center justify-between text-amber-400 text-xs font-semibold mb-1">
-            <span>ผู้มีสิทธิ์ลุ้น Lucky Draw</span>
-            <Flame className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-2xl font-bold text-amber-300 font-mono tabular-nums">
-            {eligibleCandidates.length} <span className="text-xs font-normal text-zinc-400 font-sans">คน</span>
+          <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 font-mono tabular-nums">
+            {roster.length} <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 font-sans">{t('คน', 'staff')}</span>
           </div>
           <div className="text-[11px] text-zinc-500 mt-1">
-            เฉพาะผู้ลงทะเบียนและไม่ติดบล็อค
+            {t('ฐานข้อมูลจัดโต๊ะพนักงาน', 'Seating & employee database')}
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-          <div className="flex items-center justify-between text-indigo-400 text-xs font-semibold mb-1">
-            <span>แจกรางวัลสำเร็จแล้ว</span>
-            <Trophy className="w-4 h-4 text-indigo-400" />
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
+          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-xs font-semibold mb-1">
+            <span>{t('ลงทะเบียนเข้างานแล้ว', 'Checked In')}</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className="text-2xl font-bold text-indigo-300 font-mono tabular-nums">
-            {luckyWinners.length} <span className="text-xs font-normal text-zinc-400 font-sans">รางวัล</span>
+          <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 font-mono tabular-nums">
+            {registrations.length} <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 font-sans">{t('คน', 'guests')}</span>
           </div>
           <div className="text-[11px] text-zinc-500 mt-1 font-mono tabular-nums">
-            เหลืออีก {prizes.reduce((acc, p) => acc + p.remaining, 0)} รางวัล
+            {t(
+              `คิดเป็น ${roster.length > 0 ? Math.round((registrations.length / roster.length) * 100) : 0}% ของทั้งหมด`,
+              `${roster.length > 0 ? Math.round((registrations.length / roster.length) * 100) : 0}% of total roster`
+            )}
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
+          <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-xs font-semibold mb-1">
+            <span>{t('ผู้มีสิทธิ์ลุ้น Lucky Draw', 'Eligible Candidates')}</span>
+            <Flame className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold text-amber-700 dark:text-amber-300 font-mono tabular-nums">
+            {eligibleCandidates.length} <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 font-sans">{t('คน', 'eligible')}</span>
+          </div>
+          <div className="text-[11px] text-zinc-500 mt-1">
+            {t('เฉพาะผู้ลงทะเบียนและไม่ติดบล็อค', 'Checked-in & unblocked guests')}
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
+          <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 text-xs font-semibold mb-1">
+            <span>{t('แจกรางวัลสำเร็จแล้ว', 'Prizes Drawn')}</span>
+            <Trophy className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 font-mono tabular-nums">
+            {luckyWinners.length} <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400 font-sans">{t('รางวัล', 'won')}</span>
+          </div>
+          <div className="text-[11px] text-zinc-500 mt-1 font-mono tabular-nums">
+            {t(
+              `เหลืออีก ${prizes.reduce((acc, p) => acc + p.remaining, 0)} รางวัล`,
+              `${prizes.reduce((acc, p) => acc + p.remaining, 0)} prizes left`
+            )}
           </div>
         </div>
       </div>
 
-      {/* Admin Navigation Tabs - Segmented Dark Control */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl mb-6 overflow-x-auto">
+      {/* Admin Navigation Tabs - Segmented Control */}
+      <div className="flex items-center gap-1.5 p-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl mb-6 overflow-x-auto shadow-sm dark:shadow-none">
         <button
           type="button"
           onClick={() => {
@@ -666,11 +712,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           className={`min-h-[44px] px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
             activeTab === 'luckydraw'
               ? 'bg-amber-400 text-zinc-950'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
           <Trophy className="w-4 h-4" />
-          <span>เวทีสุ่ม Lucky Draw &amp; รีโมทผู้บริหาร</span>
+          <span>{t('เวทีสุ่ม Lucky Draw & รีโมทผู้บริหาร', 'Lucky Draw Stage & VIP Remote')}</span>
         </button>
 
         <button
@@ -682,11 +728,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           className={`min-h-[44px] px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
             activeTab === 'prizes'
               ? 'bg-amber-400 text-zinc-950'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
           <Gift className="w-4 h-4" />
-          <span>จัดการของรางวัล &amp; แนบรูป ({prizes.length})</span>
+          <span>{t(`จัดการของรางวัล & แนบรูป (${prizes.length})`, `Prizes & Images (${prizes.length})`)}</span>
         </button>
 
         <button
@@ -698,11 +744,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           className={`min-h-[44px] px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
             activeTab === 'overview'
               ? 'bg-amber-400 text-zinc-950'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>รายชื่อผู้ลงทะเบียน ({registrations.length})</span>
+          <span>{t(`รายชื่อผู้ลงทะเบียน (${registrations.length})`, `Checked-in List (${registrations.length})`)}</span>
         </button>
 
         <button
@@ -714,11 +760,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           className={`min-h-[44px] px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
             activeTab === 'roster'
               ? 'bg-amber-400 text-zinc-950'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
           <FileSpreadsheet className="w-4 h-4" />
-          <span>นำเข้าข้อมูล Excel ({roster.length})</span>
+          <span>{t(`นำเข้าข้อมูล Excel (${roster.length})`, `Import Excel (${roster.length})`)}</span>
         </button>
 
         <button
@@ -730,11 +776,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           className={`min-h-[44px] px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
             activeTab === 'history'
               ? 'bg-amber-400 text-zinc-950'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
           <Award className="w-4 h-4" />
-          <span>รายงานผลสุ่มรางวัล ({luckyWinners.length})</span>
+          <span>{t(`รายงานผลสุ่มรางวัล (${luckyWinners.length})`, `Draw History (${luckyWinners.length})`)}</span>
         </button>
 
         <button
@@ -746,11 +792,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           className={`min-h-[44px] px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
             activeTab === 'settings'
               ? 'bg-amber-400 text-zinc-950'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
           <Settings className="w-4 h-4" />
-          <span>ตั้งค่างานเลี้ยง &amp; สลับงานใหม่</span>
+          <span>{t('ตั้งค่างานเลี้ยง & สลับงานใหม่', 'Event Settings & Reset')}</span>
         </button>
       </div>
 
@@ -760,21 +806,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {activeTab === 'luckydraw' && (
         <div className="space-y-6">
           {/* VIP EXECUTIVE REMOTE LINK & TRIGGER */}
-          <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900 border border-zinc-800 shadow-lg">
+          <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-md dark:shadow-lg">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center text-amber-400 shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-amber-400/20 dark:bg-amber-400/15 border border-amber-500/40 dark:border-amber-400/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
                   <Crown className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-bold text-amber-400 mb-0.5">
-                    ระบบรีโมทสำหรับผู้บริหาร (VIP Executive Remote)
+                  <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mb-0.5">
+                    {t('ระบบรีโมทสำหรับผู้บริหาร (VIP Executive Remote)', 'VIP Executive Mobile Remote')}
                   </div>
-                  <h3 className="text-lg font-bold text-zinc-100">
-                    แชร์ลิงก์ให้ผู้บริหารกดปุ่ม &quot;LUCKY DRAW&quot; ได้โดยตรงจากมือถือ
+                  <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                    {t(
+                      'แชร์ลิงก์ให้ผู้บริหารกดปุ่ม "LUCKY DRAW" ได้โดยตรงจากมือถือ',
+                      'Share link for executives to trigger "LUCKY DRAW" from their phone'
+                    )}
                   </h3>
-                  <p className="text-xs text-zinc-400">
-                    ผู้บริหารไม่ต้องล็อกอิน โดยแอดมินจะต้องกดเปิดปุ่มทุกครั้งที่จะให้กดในแต่ละรอบ
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    {t(
+                      'ผู้บริหารไม่ต้องล็อกอิน โดยแอดมินจะต้องกดเปิดปุ่มทุกครั้งที่จะให้กดในแต่ละรอบ',
+                      'No login required for VIPs. Admin must unlock the button before each round.'
+                    )}
                   </p>
                 </div>
               </div>
@@ -783,35 +835,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <button
                   type="button"
                   onClick={handleCopyVipLink}
-                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-zinc-100 border border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
+                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
                 >
-                  <Copy className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{copyLinkNotice ? 'คัดลอกลิงก์สำเร็จ!' : 'คัดลอกลิงก์ส่งให้ผู้บริหาร'}</span>
+                  <Copy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>
+                    {copyLinkNotice
+                      ? t('คัดลอกลิงก์สำเร็จ!', 'Link Copied!')
+                      : t('คัดลอกลิงก์ส่งให้ผู้บริหาร', 'Copy VIP Link')}
+                  </span>
                 </button>
 
                 {onOpenVipView && (
                   <button
                     type="button"
                     onClick={onOpenVipView}
-                    className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
+                    className="min-h-[44px] px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
                   >
-                    <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-                    <span>ทดลองเปิดหน้ารีโมท</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>{t('ทดลองเปิดหน้ารีโมท', 'Preview VIP Screen')}</span>
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold text-zinc-200">
-                  สถานะปุ่มบนมือถือผู้บริหาร:{' '}
-                  <span className={config.isVipTriggerActive ? 'text-emerald-400 font-bold' : 'text-zinc-400'}>
-                    {config.isVipTriggerActive ? 'เปิดใช้งานอยู่ (รอผู้บริหารกด)' : 'ล็อกอยู่ (ผู้บริหารยังกดไม่ได้)'}
+                <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                  {t('สถานะปุ่มบนมือถือผู้บริหาร:', 'VIP Mobile Button Status:')}{' '}
+                  <span className={config.isVipTriggerActive ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-zinc-500 dark:text-zinc-400'}>
+                    {config.isVipTriggerActive
+                      ? t('เปิดใช้งานอยู่ (รอผู้บริหารกด)', 'Unlocked (Waiting for VIP)')
+                      : t('ล็อกอยู่ (ผู้บริหารยังกดไม่ได้)', 'Locked (Standing By)')}
                   </span>
                 </div>
-                <div className="text-[11px] text-zinc-400 mt-0.5">
-                  รางวัลที่ผูกกับรอบนี้: <span className="font-semibold text-amber-400">{currentPrize?.name}</span>
+                <div className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5">
+                  {t('รางวัลที่ผูกกับรอบนี้:', 'Active Round Prize:')}{' '}
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">{currentPrize?.name}</span>
                 </div>
               </div>
 
@@ -820,19 +879,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onClick={handleToggleVipTrigger}
                 className={`min-h-[46px] px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer border ${
                   config.isVipTriggerActive
-                    ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/30'
+                    ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-500/30'
                     : 'bg-emerald-400 hover:bg-emerald-300 text-zinc-950 border-emerald-400'
                 }`}
               >
                 {config.isVipTriggerActive ? (
                   <>
                     <Lock className="w-4 h-4" />
-                    <span>ล็อกปุ่มผู้บริหารชั่วคราว</span>
+                    <span>{t('ล็อกปุ่มผู้บริหารชั่วคราว', 'Lock VIP Button')}</span>
                   </>
                 ) : (
                   <>
                     <Unlock className="w-4 h-4" />
-                    <span>เปิดสิทธิ์ให้ผู้บริหารกดรอบนี้</span>
+                    <span>{t('เปิดสิทธิ์ให้ผู้บริหารกดรอบนี้', 'Unlock VIP Button for Round')}</span>
                   </>
                 )}
               </button>
@@ -840,16 +899,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           {/* MAIN DRAW STAGE */}
-          <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-5 sm:p-7 shadow-xl relative overflow-hidden">
+          <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-md dark:shadow-xl relative overflow-hidden">
             <div className="max-w-2xl mx-auto text-center">
-              <p className="text-xs font-semibold text-amber-400 mb-1">
-                เวทีสุ่มจับรางวัล Lucky Draw
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">
+                {t('เวทีสุ่มจับรางวัล Lucky Draw', 'Lucky Draw Live Stage')}
               </p>
-              <h3 className="text-2xl sm:text-3xl font-bold text-zinc-100">
-                พร้อมสุ่มผู้โชคดีค่ำคืนนี้
+              <h3 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+                {t('พร้อมสุ่มผู้โชคดีค่ำคืนนี้', 'Ready to Draw Tonight’s Winner')}
               </h3>
-              <p className="text-xs text-zinc-400 mt-1">
-                สุ่มเฉพาะผู้ลงทะเบียนสำเร็จ ไม่แจกซ้ำรหัสเดิม และคัดกรองตามกฎความยุติธรรม
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+                {t(
+                  'สุ่มเฉพาะผู้ลงทะเบียนสำเร็จ ไม่แจกซ้ำรหัสเดิม และคัดกรองตามกฎความยุติธรรม',
+                  'Draws only from checked-in attendees with zero duplicate winners and fair-chance filters.'
+                )}
               </p>
 
               {/* Prize Selection Buttons */}
@@ -872,17 +934,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       }}
                       className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer border ${
                         isSelected
-                          ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                          ? 'bg-amber-400 text-zinc-950 border-amber-400 dark:border-amber-300'
                           : isExhausted
-                          ? 'bg-zinc-950 text-zinc-600 border-zinc-800 cursor-not-allowed'
-                          : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-200 border-zinc-800'
+                          ? 'bg-zinc-100 dark:bg-zinc-950 text-zinc-400 dark:text-zinc-600 border-zinc-200 dark:border-zinc-800 cursor-not-allowed'
+                          : 'bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-800'
                       }`}
                     >
-                      <Trophy className={`w-3.5 h-3.5 ${isSelected ? 'text-zinc-950' : 'text-amber-400'}`} />
+                      <Trophy className={`w-3.5 h-3.5 ${isSelected ? 'text-zinc-950' : 'text-amber-600 dark:text-amber-400'}`} />
                       <span>{p.name}</span>
                       <span
                         className={`text-[11px] font-mono tabular-nums ${
-                          isSelected ? 'text-zinc-900 font-bold' : 'text-zinc-400'
+                          isSelected ? 'text-zinc-900 font-bold' : 'text-zinc-500 dark:text-zinc-400'
                         }`}
                       >
                         ({p.remaining})
@@ -894,9 +956,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Active Prize Info Preview */}
               {currentPrize && (
-                <div className="mb-6 p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row items-center gap-4 text-left">
+                <div className="mb-6 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row items-center gap-4 text-left">
                   {currentPrize.imageUrl && !brokenImages[currentPrize.id] ? (
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 shrink-0">
+                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shrink-0">
                       <img
                         src={currentPrize.imageUrl}
                         alt={currentPrize.name}
@@ -906,28 +968,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     </div>
                   ) : (
-                    <div className="w-20 h-20 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 text-amber-400">
+                    <div className="w-20 h-20 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400">
                       <Gift className="w-8 h-8" />
                     </div>
                   )}
 
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-semibold text-amber-400">
+                    <div className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                       {currentPrize.tier}
                     </div>
-                    <div className="text-base sm:text-lg font-bold text-zinc-100 truncate">
+                    <div className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 truncate">
                       {currentPrize.name}
                     </div>
                     {currentPrize.sponsor && (
-                      <div className="text-xs text-zinc-400">
-                        ผู้สนับสนุน: {currentPrize.sponsor}
+                      <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                        {t('ผู้สนับสนุน:', 'Sponsor:')} {currentPrize.sponsor}
                       </div>
                     )}
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="text-xs text-zinc-400">จำนวนที่เหลือ</div>
-                    <div className="text-xl font-bold text-amber-400 font-mono tabular-nums">
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{t('จำนวนที่เหลือ', 'Remaining')}</div>
+                    <div className="text-xl font-bold text-amber-600 dark:text-amber-400 font-mono tabular-nums">
                       {currentPrize.remaining} / {currentPrize.quantity}
                     </div>
                   </div>
@@ -935,10 +997,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
 
               {/* SHUFFLE / DRAWING ANIMATION DISPLAY */}
-              <div className="w-full max-w-md mx-auto aspect-[16/10] rounded-2xl bg-zinc-950 border border-zinc-800 p-4 flex flex-col items-center justify-center relative mb-6">
+              <div className="w-full max-w-md mx-auto aspect-[16/10] rounded-2xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col items-center justify-center relative mb-6">
                 {isDrawing && drawShufflingCandidate ? (
                   <div className="flex flex-col items-center animate-bounce">
-                    <div className="w-20 h-24 rounded-xl overflow-hidden border-2 border-amber-400 mb-2 shadow-lg bg-zinc-900">
+                    <div className="w-20 h-24 rounded-xl overflow-hidden border-2 border-amber-500 dark:border-amber-400 mb-2 shadow-lg bg-zinc-100 dark:bg-zinc-900">
                       {drawShufflingCandidate.selfieUrl ? (
                         <img
                           src={drawShufflingCandidate.selfieUrl}
@@ -952,30 +1014,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                       )}
                     </div>
-                    <div className="text-xl font-bold text-amber-400 font-mono">
+                    <div className="text-xl font-bold text-amber-600 dark:text-amber-400 font-mono">
                       {drawShufflingCandidate.employeeId}
                     </div>
-                    <div className="text-base font-bold text-zinc-100">
+                    <div className="text-base font-bold text-zinc-900 dark:text-zinc-100">
                       {drawShufflingCandidate.fullName}
                     </div>
-                    <div className="text-xs text-zinc-400 font-medium">
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400 font-medium">
                       {drawShufflingCandidate.tableNumber}
                     </div>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center mx-auto mb-3 text-amber-400">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-400/20 dark:bg-amber-400/15 border border-amber-500/40 dark:border-amber-400/30 flex items-center justify-center mx-auto mb-3 text-amber-600 dark:text-amber-400">
                       <Trophy className="w-8 h-8" />
                     </div>
-                    <div className="text-sm font-bold text-zinc-100">
-                      ผู้มีสิทธิ์ลุ้นรางวัลทั้งหมด:{' '}
-                      <span className="text-amber-400 font-mono tabular-nums text-base">
+                    <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {t('ผู้มีสิทธิ์ลุ้นรางวัลทั้งหมด:', 'Total Eligible Candidates:')}{' '}
+                      <span className="text-amber-600 dark:text-amber-400 font-mono tabular-nums text-base">
                         {eligibleCandidates.length}
                       </span>{' '}
-                      ท่าน
+                      {t('ท่าน', 'guests')}
                     </div>
-                    <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto">
-                      แอดมินสามารถกดสุ่มจากที่นี่ หรือเปิดสิทธิ์ให้ผู้บริหารกดผ่านมือถือได้ทันที
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
+                      {t(
+                        'แอดมินสามารถกดสุ่มจากที่นี่ หรือเปิดสิทธิ์ให้ผู้บริหารกดผ่านมือถือได้ทันที',
+                        'Trigger the draw right here or unlock the VIP remote for an executive.'
+                      )}
                     </p>
                   </div>
                 )}
@@ -988,14 +1053,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onClick={handleStartLuckyDraw}
                 className={`min-h-[56px] px-8 py-3 rounded-xl font-bold text-base shadow-lg flex items-center justify-center gap-3 mx-auto transition-transform active:scale-95 cursor-pointer ${
                   isDrawing
-                    ? 'bg-zinc-800 text-zinc-400 cursor-wait'
+                    ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 cursor-wait'
                     : eligibleCandidates.length === 0 || !currentPrize || currentPrize.remaining <= 0
-                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
                     : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 hover:scale-105'
                 }`}
               >
                 <Sparkles className="w-6 h-6" />
-                <span>{isDrawing ? 'กำลังสุ่มรายชื่อ...' : 'เริ่มสุ่มจับรางวัล (Admin Trigger)'}</span>
+                <span>
+                  {isDrawing
+                    ? t('กำลังสุ่มรายชื่อ...', 'Drawing Winner...')
+                    : t('เริ่มสุ่มจับรางวัล (Admin Trigger)', 'Start Lucky Draw (Admin Trigger)')}
+                </span>
               </button>
             </div>
           </div>
@@ -1009,30 +1078,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   soundFX.playClick();
                   setIsFairChancePinModalOpen(true);
                 }}
-                className="w-9 h-9 rounded-xl bg-zinc-900/70 hover:bg-zinc-800 border border-zinc-800/80 hover:border-amber-400/40 text-zinc-600 hover:text-amber-400 flex items-center justify-center transition cursor-pointer"
-                title="การคัดกรอง & บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม"
-                aria-label="เปิดเมนูการคัดกรองสิทธิ์"
+                className="w-9 h-9 rounded-xl bg-zinc-100 dark:bg-zinc-900/70 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800/80 hover:border-amber-500/40 dark:hover:border-amber-400/40 text-zinc-400 dark:text-zinc-600 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center transition cursor-pointer"
+                title={t('การคัดกรอง & บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม', 'Fair-Chance Filtering & Group Blocking')}
+                aria-label={t('เปิดเมนูการคัดกรองสิทธิ์', 'Open Fair-Chance Filter Menu')}
               >
                 <ShieldAlert className="w-4 h-4" />
               </button>
             </div>
           ) : (
-            <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900 border border-amber-400/30 animate-in fade-in duration-200">
+            <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-amber-500/40 dark:border-amber-400/30 animate-in fade-in duration-200 shadow-md dark:shadow-none">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div>
-                  <h4 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-amber-400" />
-                    <span>การคัดกรอง &amp; บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม</span>
+                  <h4 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                    <span>{t('การคัดกรอง & บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม', 'Fair-Chance Filtering & Group Blocking')}</span>
                   </h4>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    ตั้งค่าบล็อคกลุ่ม เช่น คณะผู้บริหาร หรือผู้ที่เคยได้รับรางวัล เพื่อกระจายโอกาส
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                    {t(
+                      'ตั้งค่าบล็อคกลุ่ม เช่น คณะผู้บริหาร หรือผู้ที่เคยได้รับรางวัล เพื่อกระจายโอกาส',
+                      'Block specific roles/groups or previous winners to keep the draw fair.'
+                    )}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold">
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>ไม่แจกซ้ำรหัสเดิม: เปิดใช้งานตลอด</span>
+                    <span>{t('ไม่แจกซ้ำรหัสเดิม: เปิดใช้งานตลอด', 'No Duplicate Winners: Always On')}</span>
                   </div>
                   <button
                     type="button"
@@ -1040,16 +1112,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       soundFX.playClick();
                       setIsFairChanceUnlocked(false);
                     }}
-                    className="min-h-[36px] px-3 py-1 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-zinc-400 hover:text-zinc-200 font-semibold cursor-pointer"
+                    className="min-h-[36px] px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-950 hover:bg-zinc-200 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 font-semibold cursor-pointer"
                   >
-                    ซ่อนเมนู
+                    {t('ซ่อนเมนู', 'Hide Menu')}
                   </button>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-zinc-300 block">
-                  เลือกกลุ่มหรือบทบาทที่ต้องการบล็อคจากการจับรางวัล:
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block">
+                  {t('เลือกกลุ่มหรือบทบาทที่ต้องการบล็อคจากการจับรางวัล:', 'Select groups or roles to exclude from the draw:')}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {allGroups.map((groupName) => {
@@ -1061,18 +1133,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onClick={() => handleToggleBlockedGroup(groupName)}
                         className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition cursor-pointer ${
                           isBlocked
-                            ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                            : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-800'
+                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                            : 'bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                         }`}
                       >
                         {isBlocked ? (
-                          <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                         ) : (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                         )}
                         <span>{groupName}</span>
                         <span className="text-[11px] font-mono">
-                          {isBlocked ? '(บล็อคอยู่)' : '(มีสิทธิ์)'}
+                          {isBlocked ? t('(บล็อคอยู่)', '(Blocked)') : t('(มีสิทธิ์)', '(Eligible)')}
                         </span>
                       </button>
                     );
@@ -1089,14 +1161,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ========================================================================= */}
       {activeTab === 'prizes' && (
         <div className="space-y-6">
-          <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm dark:shadow-none">
             <div>
-              <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-                <Gift className="w-5 h-5 text-amber-400" />
-                <span>จัดการของรางวัล &amp; แนบรูปตัวอย่าง</span>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Gift className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                <span>{t('จัดการของรางวัล & แนบรูปตัวอย่าง', 'Manage Prizes & Sample Images')}</span>
               </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                ปรับแต่งเพิ่มลดประเภทของรางวัล แก้ไขจำนวน และอัปโหลดรูปตัวอย่างของรางวัลได้ตามต้องการ
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                {t(
+                  'ปรับแต่งเพิ่มลดประเภทของรางวัล แก้ไขจำนวน และอัปโหลดรูปตัวอย่างของรางวัลได้ตามต้องการ',
+                  'Add, edit, remove prize tiers, adjust quantities, and upload preview images.'
+                )}
               </p>
             </div>
 
@@ -1110,7 +1185,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               className="min-h-[44px] px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
-              <span>เพิ่มของรางวัลใหม่</span>
+              <span>{t('เพิ่มของรางวัลใหม่', 'Add New Prize')}</span>
             </button>
           </div>
 
@@ -1120,10 +1195,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               return (
                 <div
                   key={prize.id}
-                  className="rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 overflow-hidden flex flex-col justify-between transition"
+                  className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 overflow-hidden flex flex-col justify-between transition shadow-sm dark:shadow-none"
                 >
                   <div>
-                    <div className="relative w-full h-44 bg-zinc-950 border-b border-zinc-800 overflow-hidden flex items-center justify-center">
+                    <div className="relative w-full h-44 bg-zinc-100 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 overflow-hidden flex items-center justify-center">
                       {hasValidImage ? (
                         <img
                           src={prize.imageUrl}
@@ -1133,10 +1208,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           onError={() => setBrokenImages((prev) => ({ ...prev, [prize.id]: true }))}
                         />
                       ) : (
-                        <div className="flex flex-col items-center justify-center text-zinc-600">
-                          <Gift className="w-12 h-12 text-amber-400/50" />
+                        <div className="flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-600">
+                          <Gift className="w-12 h-12 text-amber-500/50 dark:text-amber-400/50" />
                           <span className="text-[11px] font-medium text-zinc-500 mt-1">
-                            ไม่มีรูปภาพแนบ
+                            {t('ไม่มีรูปภาพแนบ', 'No Image Attached')}
                           </span>
                         </div>
                       )}
@@ -1146,31 +1221,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </span>
                       <span
                         className={`absolute top-2.5 right-3 text-[11px] font-mono tabular-nums font-bold ${
-                          prize.remaining > 0 ? 'text-emerald-300' : 'text-zinc-500'
+                          prize.remaining > 0 ? 'text-emerald-300' : 'text-zinc-400'
                         }`}
                       >
-                        เหลือ {prize.remaining} / {prize.quantity}
+                        {t(`เหลือ ${prize.remaining} / ${prize.quantity}`, `Left ${prize.remaining} / ${prize.quantity}`)}
                       </span>
                     </div>
 
                     <div className="p-4">
-                      <h4 className="text-base font-bold text-zinc-100 tracking-tight">
+                      <h4 className="text-base font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
                         {prize.name}
                       </h4>
                       {prize.sponsor && (
-                        <p className="text-xs text-amber-400 font-medium mt-0.5">
-                          ผู้สนับสนุน: {prize.sponsor}
+                        <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                          {t('ผู้สนับสนุน:', 'Sponsor:')} {prize.sponsor}
                         </p>
                       )}
                       {prize.description && (
-                        <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 line-clamp-2">
                           {prize.description}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="p-3 bg-zinc-950/60 border-t border-zinc-800 flex items-center justify-between gap-2">
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -1178,21 +1253,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         setIsPrizeModalOpen(true);
                         soundFX.playClick();
                       }}
-                      className="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold border border-zinc-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      className="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold border border-zinc-300 dark:border-zinc-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
                     >
-                      <Edit className="w-3.5 h-3.5 text-amber-400" />
-                      <span>แก้ไขข้อมูล / รูปภาพ</span>
+                      <Edit className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <span>{t('แก้ไขข้อมูล / รูปภาพ', 'Edit Details / Image')}</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => {
-                        if (confirm(`คุณต้องการลบรางวัล "${prize.name}" หรือไม่?`)) {
+                        if (
+                          confirm(
+                            t(
+                              `คุณต้องการลบรางวัล "${prize.name}" หรือไม่?`,
+                              `Delete prize "${prize.name}"?`
+                            )
+                          )
+                        ) {
                           handleDeletePrize(prize.id);
                         }
                       }}
-                      className="min-h-[40px] min-w-[40px] p-2 rounded-xl bg-zinc-900 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-300 border border-zinc-800 hover:border-rose-500/30 flex items-center justify-center transition cursor-pointer"
-                      title="ลบรางวัล"
+                      className="min-h-[40px] min-w-[40px] p-2 rounded-xl bg-white dark:bg-zinc-900 hover:bg-rose-500/15 dark:hover:bg-rose-500/20 text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-300 border border-zinc-200 dark:border-zinc-800 hover:border-rose-500/30 flex items-center justify-center transition cursor-pointer"
+                      title={t('ลบรางวัล', 'Delete prize')}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1209,7 +1291,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ========================================================================= */}
       {activeTab === 'overview' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm dark:shadow-none">
             <div className="flex-1 flex flex-col sm:flex-row items-center gap-2">
               <div className="relative w-full sm:w-72">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1217,8 +1299,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   type="text"
                   value={attendeeSearch}
                   onChange={(e) => setAttendeeSearch(e.target.value)}
-                  placeholder="ค้นหารหัส, เบอร์โทร, ชื่อ, โต๊ะ..."
-                  className="w-full min-h-[44px] pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+                  placeholder={t('ค้นหารหัส, เบอร์โทร, ชื่อ, โต๊ะ...', 'Search ID, phone, name, table...')}
+                  className="w-full min-h-[44px] pl-9 pr-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-amber-500 dark:focus:border-amber-400"
                 />
               </div>
 
@@ -1227,9 +1309,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <select
                   value={selectedDeptFilter}
                   onChange={(e) => setSelectedDeptFilter(e.target.value)}
-                  className="w-full sm:w-auto min-h-[44px] px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 focus:outline-none focus:border-amber-400 font-medium"
+                  className="w-full sm:w-auto min-h-[44px] px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 font-medium"
                 >
-                  <option value="ALL">ทุกแผนก ({registrations.length})</option>
+                  <option value="ALL">{t(`ทุกแผนก (${registrations.length})`, `All Departments (${registrations.length})`)}</option>
                   {allDepartments.map((dept) => (
                     <option key={dept} value={dept}>
                       {dept}
@@ -1248,7 +1330,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               className="min-h-[44px] px-4 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer shrink-0"
             >
               <Download className="w-4 h-4" />
-              <span>ส่งออกรายชื่อลงทะเบียนเป็น Excel (.xlsx)</span>
+              <span>{t('ส่งออกรายชื่อลงทะเบียนเป็น Excel (.xlsx)', 'Export Check-ins to Excel (.xlsx)')}</span>
             </button>
           </div>
 
@@ -1264,9 +1346,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 return (
                   <div
                     key={att.id}
-                    className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center gap-3"
+                    className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center gap-3 shadow-sm dark:shadow-none"
                   >
-                    <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-700 shrink-0">
+                    <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 shrink-0">
                       {att.selfieUrl ? (
                         <img
                           src={att.selfieUrl}
@@ -1276,27 +1358,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-[9px] text-zinc-500">
-                          ไม่มีรูป
+                          {t('ไม่มีรูป', 'No Photo')}
                         </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-mono font-bold text-amber-400 truncate">
+                        <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 truncate">
                           {att.employeeId}
                         </span>
                         {hasWon ? (
-                          <span className="text-[10px] font-semibold text-amber-300 shrink-0">ได้รางวัลแล้ว</span>
+                          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 shrink-0">
+                            {t('ได้รางวัลแล้ว', 'Won')}
+                          </span>
                         ) : isBlocked ? (
-                          <span className="text-[10px] font-semibold text-rose-400 shrink-0">ถูกบล็อค</span>
+                          <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 shrink-0">
+                            {t('ถูกบล็อค', 'Blocked')}
+                          </span>
                         ) : (
-                          <span className="text-[10px] font-semibold text-emerald-400 shrink-0">พร้อมลุ้น</span>
+                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
+                            {t('พร้อมลุ้น', 'Eligible')}
+                          </span>
                         )}
                       </div>
-                      <div className="text-sm font-bold text-zinc-100 truncate">
+                      <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
                         {att.fullName} {att.nickname ? `(${att.nickname})` : ''}
                       </div>
-                      <div className="text-[11px] text-zinc-400 truncate mt-0.5 font-mono tabular-nums">
+                      <div className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate mt-0.5 font-mono tabular-nums">
                         {att.phone || '-'} · {att.tableNumber}
                       </div>
                     </div>
@@ -1304,31 +1392,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 );
               })
             ) : (
-              <div className="p-8 rounded-2xl bg-zinc-900 border border-zinc-800 text-center text-xs text-zinc-500">
+              <div className="p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-500">
                 {registrations.length === 0
-                  ? 'ยังไม่มีพนักงานลงทะเบียนเข้างานในขณะนี้'
-                  : 'ไม่พบรายชื่อที่ตรงกับคำค้นหา'}
+                  ? t('ยังไม่มีพนักงานลงทะเบียนเข้างานในขณะนี้', 'No guests have checked in yet.')
+                  : t('ไม่พบรายชื่อที่ตรงกับคำค้นหา', 'No attendees match your search.')}
               </div>
             )}
           </div>
 
           {/* Desktop Table View for Attendees */}
-          <div className="hidden md:block rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+          <div className="hidden md:block rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm dark:shadow-none">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-zinc-950 text-zinc-400 text-[11px] font-semibold border-b border-zinc-800">
+                <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 text-[11px] font-semibold border-b border-zinc-200 dark:border-zinc-800">
                   <tr>
-                    <th className="py-3 px-4">ภาพเซลฟี่</th>
-                    <th className="py-3 px-4">รหัสพนักงาน</th>
-                    <th className="py-3 px-4">เบอร์โทรศัพท์</th>
-                    <th className="py-3 px-4">ชื่อ - นามสกุล</th>
-                    <th className="py-3 px-4">แผนก</th>
-                    <th className="py-3 px-4">หมายเลขโต๊ะ</th>
-                    <th className="py-3 px-4">เวลาลงทะเบียน</th>
-                    <th className="py-3 px-4">สิทธิ์ Lucky Draw</th>
+                    <th className="py-3 px-4">{t('ภาพเซลฟี่', 'Selfie')}</th>
+                    <th className="py-3 px-4">{t('รหัสพนักงาน', 'Employee ID')}</th>
+                    <th className="py-3 px-4">{t('เบอร์โทรศัพท์', 'Phone')}</th>
+                    <th className="py-3 px-4">{t('ชื่อ - นามสกุล', 'Full Name')}</th>
+                    <th className="py-3 px-4">{t('แผนก', 'Department')}</th>
+                    <th className="py-3 px-4">{t('หมายเลขโต๊ะ', 'Table')}</th>
+                    <th className="py-3 px-4">{t('เวลาลงทะเบียน', 'Checked In At')}</th>
+                    <th className="py-3 px-4">{t('สิทธิ์ Lucky Draw', 'Draw Status')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/80 text-zinc-300">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
                   {filteredAttendees.length > 0 ? (
                     filteredAttendees.map((att) => {
                       const hasWon = wonEmployeeIds.has(att.employeeId.toUpperCase());
@@ -1337,9 +1425,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         (att.groupRole && blockedGroupSet.has(att.groupRole));
 
                       return (
-                        <tr key={att.id} className="hover:bg-zinc-800/40 transition">
+                        <tr key={att.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition">
                           <td className="py-2.5 px-4">
-                            <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-700">
+                            <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700">
                               {att.selfieUrl ? (
                                 <img
                                   src={att.selfieUrl}
@@ -1349,52 +1437,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-[9px] text-zinc-500">
-                                  ไม่มีรูป
+                                  {t('ไม่มีรูป', 'No Photo')}
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="py-2.5 px-4 font-mono font-bold text-amber-400">
+                          <td className="py-2.5 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">
                             {att.employeeId}
                           </td>
-                          <td className="py-2.5 px-4 font-mono tabular-nums text-zinc-200">
+                          <td className="py-2.5 px-4 font-mono tabular-nums text-zinc-800 dark:text-zinc-200">
                             {att.phone || '-'}
                           </td>
                           <td className="py-2.5 px-4">
-                            <div className="font-semibold text-zinc-100">{att.fullName}</div>
+                            <div className="font-semibold text-zinc-900 dark:text-zinc-100">{att.fullName}</div>
                             {att.nickname && (
-                              <div className="text-[11px] text-amber-300">
+                              <div className="text-[11px] text-amber-700 dark:text-amber-300">
                                 ({att.nickname})
                               </div>
                             )}
                           </td>
-                          <td className="py-2.5 px-4 text-zinc-400">
+                          <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
                             {att.department}
                           </td>
-                          <td className="py-2.5 px-4 font-mono text-amber-300 font-semibold">
+                          <td className="py-2.5 px-4 font-mono text-amber-700 dark:text-amber-300 font-semibold">
                             {att.tableNumber}
                           </td>
-                          <td className="py-2.5 px-4 text-zinc-400 font-mono tabular-nums text-[11px]">
-                            {new Date(att.registeredAt).toLocaleTimeString('th-TH', {
+                          <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400 font-mono tabular-nums text-[11px]">
+                            {new Date(att.registeredAt).toLocaleTimeString(lang === 'en' ? 'en-US' : 'th-TH', {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
                           </td>
                           <td className="py-2.5 px-4">
                             {hasWon ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                                 <Trophy className="w-3.5 h-3.5" />
-                                <span>ได้รางวัลแล้ว</span>
+                                <span>{t('ได้รางวัลแล้ว', 'Won')}</span>
                               </span>
                             ) : isBlocked ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-400">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
                                 <ShieldAlert className="w-3.5 h-3.5" />
-                                <span>ถูกบล็อค</span>
+                                <span>{t('ถูกบล็อค', 'Blocked')}</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>พร้อมลุ้นรางวัล</span>
+                                <span>{t('พร้อมลุ้นรางวัล', 'Eligible')}</span>
                               </span>
                             )}
                           </td>
@@ -1405,8 +1493,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-zinc-500">
                         {registrations.length === 0
-                          ? 'ยังไม่มีพนักงานลงทะเบียนเข้างานในขณะนี้'
-                          : 'ไม่พบรายชื่อที่ตรงกับคำค้นหา'}
+                          ? t('ยังไม่มีพนักงานลงทะเบียนเข้างานในขณะนี้', 'No guests have checked in yet.')
+                          : t('ไม่พบรายชื่อที่ตรงกับคำค้นหา', 'No attendees match your search.')}
                       </td>
                     </tr>
                   )}
@@ -1422,15 +1510,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ========================================================================= */}
       {activeTab === 'roster' && (
         <div className="space-y-6">
-          <div className="p-5 sm:p-6 rounded-2xl bg-zinc-900 border border-zinc-800">
+          <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div>
-                <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
-                  <span>นำเข้าข้อมูลพนักงานและหมายเลขโต๊ะผ่านไฟล์ Excel</span>
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <span>{t('นำเข้าข้อมูลพนักงานและหมายเลขโต๊ะผ่านไฟล์ Excel', 'Import Employee Roster & Table Assignments via Excel')}</span>
                 </h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  รองรับไฟล์ .xlsx และ .csv ระบบจะผูกรหัสพนักงานกับหมายเลขโต๊ะเพื่อแสดงให้พนักงานทราบทันทีหลังลงทะเบียน
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+                  {t(
+                    'รองรับไฟล์ .xlsx และ .csv ระบบจะผูกรหัสพนักงานกับหมายเลขโต๊ะเพื่อแสดงให้พนักงานทราบทันทีหลังลงทะเบียน',
+                    'Supports .xlsx and .csv files. Employee IDs will automatically match their assigned table after check-in.'
+                  )}
                 </p>
               </div>
 
@@ -1440,10 +1531,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   soundFX.playClick();
                   downloadSampleExcelTemplate();
                 }}
-                className="min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold border border-zinc-700 flex items-center justify-center gap-2 transition cursor-pointer shrink-0"
+                className="min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold border border-zinc-300 dark:border-zinc-700 flex items-center justify-center gap-2 transition cursor-pointer shrink-0"
               >
-                <Download className="w-4 h-4 text-amber-400" />
-                <span>ดาวน์โหลด Template Excel ตัวอย่าง</span>
+                <Download className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>{t('ดาวน์โหลด Template Excel ตัวอย่าง', 'Download Sample Excel Template')}</span>
               </button>
             </div>
 
@@ -1451,14 +1542,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div
                 className={`mb-4 p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
                   excelImportMessage.type === 'success'
-                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                    : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300'
                 }`}
               >
                 {excelImportMessage.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
                 )}
                 <span>{excelImportMessage.text}</span>
               </div>
@@ -1474,47 +1565,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-zinc-700 hover:border-amber-400/70 rounded-2xl p-6 text-center cursor-pointer bg-zinc-950/60 hover:bg-zinc-950 transition"
+              className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-amber-500/70 dark:hover:border-amber-400/70 rounded-2xl p-6 text-center cursor-pointer bg-zinc-50 dark:bg-zinc-950/60 hover:bg-zinc-100 dark:hover:bg-zinc-950 transition"
             >
-              <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-2 text-amber-400">
+              <div className="w-12 h-12 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mx-auto mb-2 text-amber-600 dark:text-amber-400 shadow-sm dark:shadow-none">
                 <Upload className="w-6 h-6" />
               </div>
-              <div className="text-sm font-bold text-zinc-100">
-                {excelImportLoading ? 'กำลังอ่านและประมวลผลไฟล์ Excel...' : 'คลิกเพื่อเลือกไฟล์ Excel (.xlsx / .csv) หรือลากไฟล์มาวางที่นี่'}
+              <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                {excelImportLoading
+                  ? t('กำลังอ่านและประมวลผลไฟล์ Excel...', 'Reading and parsing Excel file...')
+                  : t('คลิกเพื่อเลือกไฟล์ Excel (.xlsx / .csv) หรือลากไฟล์มาวางที่นี่', 'Click to select an Excel file (.xlsx / .csv) or drop it here')}
               </div>
-              <p className="text-xs text-zinc-400 mt-1">
-                คอลัมน์ที่รองรับ: รหัสพนักงาน, ชื่อ-นามสกุล, ชื่อเล่น, แผนก, หมายเลขโต๊ะ, กลุ่ม/บทบาท, เบอร์โทร
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+                {t(
+                  'คอลัมน์ที่รองรับ: รหัสพนักงาน, ชื่อ-นามสกุล, ชื่อเล่น, แผนก, หมายเลขโต๊ะ, กลุ่ม/บทบาท, เบอร์โทร',
+                  'Supported columns: Employee ID, Full Name, Nickname, Department, Table Number, Group/Role, Phone'
+                )}
               </p>
             </div>
           </div>
 
-          <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
-            <div className="p-4 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between">
-              <div className="text-xs font-bold text-zinc-200">
-                รายชื่อพนักงานในระบบทั้งหมด ({roster.length} คน)
+          <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm dark:shadow-none">
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+              <div className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                {t(`รายชื่อพนักงานในระบบทั้งหมด (${roster.length} คน)`, `Total Employees in Roster (${roster.length})`)}
               </div>
             </div>
 
             {/* Mobile Card List for Roster */}
-            <div className="md:hidden divide-y divide-zinc-800/80 max-h-[26rem] overflow-y-auto">
+            <div className="md:hidden divide-y divide-zinc-200 dark:divide-zinc-800/80 max-h-[26rem] overflow-y-auto">
               {roster.map((emp) => (
                 <div key={emp.id} className="p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="font-mono font-bold text-amber-400">{emp.id}</span>
+                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{emp.id}</span>
                       {emp.isBlockedFromDraw && (
-                        <span className="text-[10px] text-rose-400 font-semibold">บล็อค</span>
+                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold">
+                          {t('บล็อค', 'Blocked')}
+                        </span>
                       )}
                     </div>
-                    <div className="text-sm font-bold text-zinc-100 truncate mt-0.5">
+                    <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
                       {emp.fullName} {emp.nickname ? `(${emp.nickname})` : ''}
                     </div>
-                    <div className="text-[11px] text-zinc-400 truncate">
-                      {emp.department} · {emp.groupRole || 'พนักงานทั่วไป'}
+                    <div className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
+                      {emp.department} · {emp.groupRole || t('พนักงานทั่วไป', 'General Staff')}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-xs font-mono font-bold text-amber-300">
+                    <div className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300">
                       {emp.tableNumber}
                     </div>
                   </div>
@@ -1525,46 +1623,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {/* Desktop Table for Roster */}
             <div className="hidden md:block overflow-x-auto max-h-96">
               <table className="w-full text-left text-xs">
-                <thead className="bg-zinc-950 text-zinc-400 text-[11px] font-semibold border-b border-zinc-800 sticky top-0">
+                <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 text-[11px] font-semibold border-b border-zinc-200 dark:border-zinc-800 sticky top-0">
                   <tr>
-                    <th className="py-2.5 px-4">รหัสพนักงาน</th>
-                    <th className="py-2.5 px-4">ชื่อ - นามสกุล</th>
-                    <th className="py-2.5 px-4">ชื่อเล่น</th>
-                    <th className="py-2.5 px-4">แผนก</th>
-                    <th className="py-2.5 px-4">หมายเลขโต๊ะที่จัดสรร</th>
-                    <th className="py-2.5 px-4">กลุ่ม / บทบาท</th>
-                    <th className="py-2.5 px-4 text-center">สถานะบล็อค</th>
+                    <th className="py-2.5 px-4">{t('รหัสพนักงาน', 'Employee ID')}</th>
+                    <th className="py-2.5 px-4">{t('ชื่อ - นามสกุล', 'Full Name')}</th>
+                    <th className="py-2.5 px-4">{t('ชื่อเล่น', 'Nickname')}</th>
+                    <th className="py-2.5 px-4">{t('แผนก', 'Department')}</th>
+                    <th className="py-2.5 px-4">{t('หมายเลขโต๊ะที่จัดสรร', 'Assigned Table')}</th>
+                    <th className="py-2.5 px-4">{t('กลุ่ม / บทบาท', 'Group / Role')}</th>
+                    <th className="py-2.5 px-4 text-center">{t('สถานะบล็อค', 'Block Status')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/80 text-zinc-300">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
                   {roster.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-zinc-800/40 transition">
-                      <td className="py-2.5 px-4 font-mono font-bold text-amber-400">
+                    <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition">
+                      <td className="py-2.5 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">
                         {emp.id}
                       </td>
-                      <td className="py-2.5 px-4 font-semibold text-zinc-100">
+                      <td className="py-2.5 px-4 font-semibold text-zinc-900 dark:text-zinc-100">
                         {emp.fullName}
                       </td>
-                      <td className="py-2.5 px-4 text-amber-300">
+                      <td className="py-2.5 px-4 text-amber-700 dark:text-amber-300">
                         {emp.nickname || '-'}
                       </td>
-                      <td className="py-2.5 px-4 text-zinc-400">
+                      <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
                         {emp.department}
                       </td>
-                      <td className="py-2.5 px-4 font-mono text-amber-300 font-semibold">
+                      <td className="py-2.5 px-4 font-mono text-amber-700 dark:text-amber-300 font-semibold">
                         {emp.tableNumber}
                       </td>
-                      <td className="py-2.5 px-4 text-zinc-400">
-                        {emp.groupRole || 'พนักงานทั่วไป'}
+                      <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
+                        {emp.groupRole || t('พนักงานทั่วไป', 'General Staff')}
                       </td>
                       <td className="py-2.5 px-4 text-center">
                         {emp.isBlockedFromDraw ? (
-                          <span className="text-[11px] text-rose-400 font-semibold">
-                            บล็อค
+                          <span className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
+                            {t('บล็อค', 'Blocked')}
                           </span>
                         ) : (
                           <span className="text-[11px] text-zinc-500">
-                            ปกติ
+                            {t('ปกติ', 'Normal')}
                           </span>
                         )}
                       </td>
@@ -1582,14 +1680,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ========================================================================= */}
       {activeTab === 'history' && (
         <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm dark:shadow-none">
             <div>
-              <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-400" />
-                <span>รายงานประวัติการแจกรางวัล Lucky Draw ({luckyWinners.length} รางวัล)</span>
+              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                <span>{t(`รายงานประวัติการแจกรางวัล Lucky Draw (${luckyWinners.length} รางวัล)`, `Lucky Draw Winners Report (${luckyWinners.length} Prizes)`)}</span>
               </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                บันทึกประวัติการสุ่มรางวัลย้อนหลังโดยละเอียด สามารถตรวจสอบและดาวน์โหลดเป็น Excel ได้ทันที
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                {t(
+                  'บันทึกประวัติการสุ่มรางวัลย้อนหลังโดยละเอียด สามารถตรวจสอบและดาวน์โหลดเป็น Excel ได้ทันที',
+                  'Detailed historical draw records ready to audit and export to Excel.'
+                )}
               </p>
             </div>
 
@@ -1604,21 +1705,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className="min-h-[44px] px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
               >
                 <Download className="w-4 h-4" />
-                <span>ส่งออกรายงานผู้ได้รางวัลเป็น Excel</span>
+                <span>{t('ส่งออกรายงานผู้ได้รางวัลเป็น Excel', 'Export Winners to Excel')}</span>
               </button>
 
               {luckyWinners.length > 0 && (
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างประวัติการสุ่มรางวัลทั้งหมดและคืนสิทธิ์ให้ผู้เข้าร่วมงาน?')) {
+                    if (
+                      confirm(
+                        t(
+                          'คุณแน่ใจหรือไม่ว่าต้องการล้างประวัติการสุ่มรางวัลทั้งหมดและคืนสิทธิ์ให้ผู้เข้าร่วมงาน?',
+                          'Are you sure you want to reset all Lucky Draw history and restore prize stock?'
+                        )
+                      )
+                    ) {
                       onResetAllLuckyDraws();
                     }
                   }}
-                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>รีเซ็ตรางวัล</span>
+                  <span>{t('รีเซ็ตรางวัล', 'Reset Draws')}</span>
                 </button>
               )}
             </div>
@@ -1630,9 +1738,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               luckyWinners.map((w, index) => (
                 <div
                   key={w.id}
-                  className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center gap-3"
+                  className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center gap-3 shadow-sm dark:shadow-none"
                 >
-                  <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-950 border border-amber-400/50 shrink-0">
+                  <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-amber-500/50 dark:border-amber-400/50 shrink-0">
                     {w.selfieUrl ? (
                       <img
                         src={w.selfieUrl}
@@ -1641,75 +1749,82 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[10px] text-amber-400 font-mono font-bold">
+                      <div className="w-full h-full flex items-center justify-center text-[10px] text-amber-600 dark:text-amber-400 font-mono font-bold">
                         #{luckyWinners.length - index}
                       </div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-amber-400 font-bold">
+                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-amber-600 dark:text-amber-400 font-bold">
                       <span>#{luckyWinners.length - index}</span>
-                      <span className="text-zinc-600">·</span>
+                      <span className="text-zinc-400 dark:text-zinc-600">·</span>
                       <span>{w.employeeId}</span>
                     </div>
-                    <div className="text-sm font-bold text-zinc-100 truncate">
+                    <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
                       {w.winnerName} {w.nickname ? `(${w.nickname})` : ''}
                     </div>
-                    <div className="text-[11px] text-amber-300 truncate">
+                    <div className="text-[11px] text-amber-700 dark:text-amber-300 truncate">
                       {w.prizeName} · {w.tableNumber}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm(`ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำรางวัลกลับเข้าสู่ระบบ)`)) {
+                      if (
+                        confirm(
+                          t(
+                            `ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำรางวัลกลับเข้าสู่ระบบ)`,
+                            `Revoke "${w.winnerName}"'s prize and return it to pool?`
+                          )
+                        )
+                      ) {
                         onDeleteLuckyWinner(w.id);
                       }
                     }}
-                    className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-400 hover:text-rose-400 hover:bg-rose-500/15 flex items-center justify-center transition cursor-pointer shrink-0"
-                    title="สละสิทธิ์ / จับใหม่"
+                    className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/15 flex items-center justify-center transition cursor-pointer shrink-0"
+                    title={t('สละสิทธิ์ / จับใหม่', 'Forfeit / Re-draw')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))
             ) : (
-              <div className="p-8 rounded-2xl bg-zinc-900 border border-zinc-800 text-center text-xs text-zinc-500">
-                ยังไม่มีประวัติการแจกรางวัลในระบบ
+              <div className="p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-500">
+                {t('ยังไม่มีประวัติการแจกรางวัลในระบบ', 'No Lucky Draw winners recorded yet.')}
               </div>
             )}
           </div>
 
           {/* Desktop Table View for Lucky Draw History */}
-          <div className="hidden md:block rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+          <div className="hidden md:block rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm dark:shadow-none">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-zinc-950 text-zinc-400 text-[11px] font-semibold border-b border-zinc-800">
+                <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 text-[11px] font-semibold border-b border-zinc-200 dark:border-zinc-800">
                   <tr>
-                    <th className="py-3 px-4">รอบ</th>
-                    <th className="py-3 px-4">รางวัล</th>
-                    <th className="py-3 px-4">ภาพเซลฟี่</th>
-                    <th className="py-3 px-4">รหัสพนักงาน</th>
-                    <th className="py-3 px-4">ชื่อผู้โชคดี</th>
-                    <th className="py-3 px-4">แผนก</th>
-                    <th className="py-3 px-4">หมายเลขโต๊ะ</th>
-                    <th className="py-3 px-4">เวลาที่จับได้</th>
-                    <th className="py-3 px-4 text-center">จัดการ</th>
+                    <th className="py-3 px-4">{t('รอบ', 'Round')}</th>
+                    <th className="py-3 px-4">{t('รางวัล', 'Prize')}</th>
+                    <th className="py-3 px-4">{t('ภาพเซลฟี่', 'Selfie')}</th>
+                    <th className="py-3 px-4">{t('รหัสพนักงาน', 'Employee ID')}</th>
+                    <th className="py-3 px-4">{t('ชื่อผู้โชคดี', 'Winner Name')}</th>
+                    <th className="py-3 px-4">{t('แผนก', 'Department')}</th>
+                    <th className="py-3 px-4">{t('หมายเลขโต๊ะ', 'Table')}</th>
+                    <th className="py-3 px-4">{t('เวลาที่จับได้', 'Drawn At')}</th>
+                    <th className="py-3 px-4 text-center">{t('จัดการ', 'Action')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/80 text-zinc-300">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
                   {luckyWinners.length > 0 ? (
                     luckyWinners.map((w, index) => (
-                      <tr key={w.id} className="hover:bg-zinc-800/40 transition">
-                        <td className="py-2.5 px-4 font-mono tabular-nums font-bold text-amber-400">
+                      <tr key={w.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition">
+                        <td className="py-2.5 px-4 font-mono tabular-nums font-bold text-amber-600 dark:text-amber-400">
                           #{luckyWinners.length - index}
                         </td>
                         <td className="py-2.5 px-4">
-                          <div className="font-semibold text-zinc-100">{w.prizeName}</div>
-                          <div className="text-[11px] text-zinc-400">{w.prizeTier}</div>
+                          <div className="font-semibold text-zinc-900 dark:text-zinc-100">{w.prizeName}</div>
+                          <div className="text-[11px] text-zinc-600 dark:text-zinc-400">{w.prizeTier}</div>
                         </td>
                         <td className="py-2.5 px-4">
-                          <div className="w-10 h-12 rounded-xl overflow-hidden bg-zinc-950 border border-amber-400/50">
+                          <div className="w-10 h-12 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 border border-amber-500/50 dark:border-amber-400/50">
                             {w.selfieUrl ? (
                               <img
                                 src={w.selfieUrl}
@@ -1724,23 +1839,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             )}
                           </div>
                         </td>
-                        <td className="py-2.5 px-4 font-mono font-bold text-amber-400">
+                        <td className="py-2.5 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">
                           {w.employeeId}
                         </td>
                         <td className="py-2.5 px-4">
-                          <div className="font-semibold text-zinc-100">{w.winnerName}</div>
+                          <div className="font-semibold text-zinc-900 dark:text-zinc-100">{w.winnerName}</div>
                           {w.nickname && (
-                            <div className="text-[11px] text-amber-300">
-                              (คุณ{w.nickname})
+                            <div className="text-[11px] text-amber-700 dark:text-amber-300">
+                              ({w.nickname})
                             </div>
                           )}
                         </td>
-                        <td className="py-2.5 px-4 text-zinc-400">{w.department}</td>
-                        <td className="py-2.5 px-4 font-mono text-amber-300 font-semibold">
+                        <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">{w.department}</td>
+                        <td className="py-2.5 px-4 font-mono text-amber-700 dark:text-amber-300 font-semibold">
                           {w.tableNumber}
                         </td>
-                        <td className="py-2.5 px-4 font-mono tabular-nums text-[11px] text-zinc-400">
-                          {new Date(w.wonAt).toLocaleTimeString('th-TH', {
+                        <td className="py-2.5 px-4 font-mono tabular-nums text-[11px] text-zinc-600 dark:text-zinc-400">
+                          {new Date(w.wonAt).toLocaleTimeString(lang === 'en' ? 'en-US' : 'th-TH', {
                             hour: '2-digit',
                             minute: '2-digit',
                             second: '2-digit',
@@ -1750,12 +1865,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirm(`ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำรางวัลกลับเข้าสู่ระบบ)`)) {
+                              if (
+                                confirm(
+                                  t(
+                                    `ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำรางวัลกลับเข้าสู่ระบบ)`,
+                                    `Revoke "${w.winnerName}"'s prize and return it to pool?`
+                                  )
+                                )
+                              ) {
                                 onDeleteLuckyWinner(w.id);
                               }
                             }}
-                            className="p-2 rounded-lg text-zinc-400 hover:text-rose-400 hover:bg-rose-500/15 transition cursor-pointer"
-                            title="สละสิทธิ์ / จับใหม่"
+                            className="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/15 transition cursor-pointer"
+                            title={t('สละสิทธิ์ / จับใหม่', 'Forfeit / Re-draw')}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1765,7 +1887,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ) : (
                     <tr>
                       <td colSpan={9} className="py-12 text-center text-zinc-500">
-                        ยังไม่มีประวัติการแจกรางวัลในระบบ
+                        {t('ยังไม่มีประวัติการแจกรางวัลในระบบ', 'No Lucky Draw winners recorded yet.')}
                       </td>
                     </tr>
                   )}
@@ -1782,34 +1904,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {activeTab === 'settings' && (
         <div className="space-y-6">
           {settingsSavedNotice && (
-            <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center justify-between animate-in fade-in duration-200">
+            <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex items-center justify-between animate-in fade-in duration-200">
               <div className="flex items-center gap-2 font-semibold text-xs">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>{settingsSavedNotice}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setSettingsSavedNotice(null)}
-                className="text-emerald-300 hover:text-emerald-100 text-xs font-bold px-2 py-1 cursor-pointer"
+                className="text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 text-xs font-bold px-2 py-1 cursor-pointer"
               >
-                ปิด
+                {t('ปิด', 'Close')}
               </button>
             </div>
           )}
 
           {/* Quick Preset Templates */}
-          <div className="p-5 rounded-2xl bg-zinc-900 border border-zinc-800">
+          <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <h3 className="text-xs font-bold text-zinc-100">
-                  เทมเพลตตัวอย่างด่วน (Quick Presets)
+                <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                  {t('เทมเพลตตัวอย่างด่วน (Quick Presets)', 'Quick Event Presets')}
                 </h3>
               </div>
-              <span className="text-[11px] text-zinc-400">กดเพื่อเปลี่ยนข้อความตัวอย่างอัตโนมัติ</span>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                {t('กดเพื่อเปลี่ยนข้อความตัวอย่างอัตโนมัติ', 'Click to auto-fill sample text')}
+              </span>
             </div>
-            <p className="text-xs text-zinc-400 mb-3">
-              คลิกเทมเพลตด้านล่างเพื่อเติมข้อความตามประเภทงานเลี้ยง แล้วกดแก้ไขหรือกดบันทึกได้ทันที:
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-3">
+              {t(
+                'คลิกเทมเพลตด้านล่างเพื่อเติมข้อความตามประเภทงานเลี้ยง แล้วกดแก้ไขหรือกดบันทึกได้ทันที:',
+                'Select a template below to pre-fill event details, then customize or save:'
+              )}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
@@ -1823,10 +1950,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     regSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อยืนยันตัวตน',
                   })
                 }
-                className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-100 cursor-pointer"
+                className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-amber-500/50 dark:hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-900 dark:text-zinc-100 cursor-pointer"
               >
-                <div className="text-sm mb-0.5">งานเลี้ยงประจำปี</div>
-                <div className="text-[11px] text-zinc-400 font-normal truncate">Annual Staff Party</div>
+                <div className="text-sm mb-0.5">{t('งานเลี้ยงประจำปี', 'Annual Party')}</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-normal truncate">Annual Staff Party</div>
               </button>
 
               <button
@@ -1840,10 +1967,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     regSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อลุ้นรางวัล Lucky Draw',
                   })
                 }
-                className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-100 cursor-pointer"
+                className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-amber-500/50 dark:hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-900 dark:text-zinc-100 cursor-pointer"
               >
-                <div className="text-sm mb-0.5">งานฉลองปีใหม่</div>
-                <div className="text-[11px] text-zinc-400 font-normal truncate">New Year Party</div>
+                <div className="text-sm mb-0.5">{t('งานฉลองปีใหม่', 'New Year Party')}</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-normal truncate">New Year Party</div>
               </button>
 
               <button
@@ -1857,10 +1984,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     regSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อดูหมายเลขโต๊ะ',
                   })
                 }
-                className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-100 cursor-pointer"
+                className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-amber-500/50 dark:hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-900 dark:text-zinc-100 cursor-pointer"
               >
-                <div className="text-sm mb-0.5">งาน Outing &amp; กาล่า</div>
-                <div className="text-[11px] text-zinc-400 font-normal truncate">Outing Dinner</div>
+                <div className="text-sm mb-0.5">{t('งาน Outing & กาล่า', 'Outing & Gala')}</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-normal truncate">Outing Dinner</div>
               </button>
 
               <button
@@ -1874,142 +2001,146 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     regSubtitle: 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อรับบัตรเข้างาน',
                   })
                 }
-                className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-100 cursor-pointer"
+                className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-amber-500/50 dark:hover:border-amber-400/50 text-left transition text-xs font-bold text-zinc-900 dark:text-zinc-100 cursor-pointer"
               >
-                <div className="text-sm mb-0.5">งานฉลองความสำเร็จ</div>
-                <div className="text-[11px] text-zinc-400 font-normal truncate">Awards &amp; Night</div>
+                <div className="text-sm mb-0.5">{t('งานฉลองความสำเร็จ', 'Awards Night')}</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-normal truncate">Awards &amp; Night</div>
               </button>
             </div>
           </div>
 
           {/* Settings Form */}
-          <form onSubmit={handleSaveSettings} className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <form onSubmit={handleSaveSettings} className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-5 shadow-sm dark:shadow-none">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-bold text-zinc-100">
-                  ปรับแต่งรายละเอียดงานเลี้ยง (Event Customization)
+                <Sliders className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  {t('ปรับแต่งรายละเอียดงานเลี้ยง (Event Customization)', 'Event Customization')}
                 </h3>
               </div>
-              <span className="text-[11px] text-amber-400 font-semibold">
-                แอดมินกำหนดเองได้อิสระ
+              <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
+                {t('แอดมินกำหนดเองได้อิสระ', 'Fully customizable')}
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  ชื่องานเลี้ยง (Event Name) <span className="text-rose-400">*</span>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  {t('ชื่องานเลี้ยง (Event Name)', 'Event Name')} <span className="text-rose-500 dark:text-rose-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={settingsName}
                   onChange={(e) => setSettingsName(e.target.value)}
-                  placeholder="เช่น งานเลี้ยงพนักงานบริษัทประจำปี 2026..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-700 focus:border-amber-400 focus:outline-none text-sm font-bold text-zinc-100 bg-zinc-950"
+                  placeholder={t('เช่น งานเลี้ยงพนักงานบริษัทประจำปี 2026...', 'e.g. Annual Company Celebration 2026...')}
+                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-sm font-bold text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-950"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  คำโปรย หรือสโลแกนงาน (Slogan / Subtitle)
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  {t('คำโปรย หรือสโลแกนงาน (Slogan / Subtitle)', 'Slogan / Subtitle')}
                 </label>
                 <input
                   type="text"
                   value={settingsSubtitle}
                   onChange={(e) => setSettingsSubtitle(e.target.value)}
-                  placeholder="เช่น Together We Shine 2026..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-700 focus:border-amber-400 focus:outline-none text-xs text-zinc-100 bg-zinc-950"
+                  placeholder="Together We Shine 2026..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-xs text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-950"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  วันที่ &amp; เวลาจัดงาน (Event Date &amp; Time)
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  {t('วันที่ & เวลาจัดงาน (Event Date & Time)', 'Event Date & Time')}
                 </label>
                 <div className="relative">
-                  <Calendar className="w-4 h-4 text-amber-400 absolute left-3 top-3 pointer-events-none" />
+                  <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400 absolute left-3 top-3 pointer-events-none" />
                   <input
                     type="text"
                     value={settingsDate}
                     onChange={(e) => setSettingsDate(e.target.value)}
-                    placeholder="เช่น วันศุกร์ที่ 19 ธันวาคม 2569 เวลา 18:00 น."
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-zinc-700 focus:border-amber-400 focus:outline-none text-xs text-zinc-100 bg-zinc-950"
+                    placeholder={t('เช่น วันศุกร์ที่ 19 ธันวาคม 2569 เวลา 18:00 น.', 'e.g. Friday Dec 19, 2026 · 6:00 PM')}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-xs text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-950"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  สถานที่จัดงาน / ห้องจัดเลี้ยง (Venue &amp; Room)
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  {t('สถานที่จัดงาน / ห้องจัดเลี้ยง (Venue & Room)', 'Venue & Room')}
                 </label>
                 <div className="relative">
-                  <MapPin className="w-4 h-4 text-amber-400 absolute left-3 top-3 pointer-events-none" />
+                  <MapPin className="w-4 h-4 text-amber-600 dark:text-amber-400 absolute left-3 top-3 pointer-events-none" />
                   <input
                     type="text"
                     value={settingsVenue}
                     onChange={(e) => setSettingsVenue(e.target.value)}
-                    placeholder="เช่น ห้อง Grand Ballroom ชั้น 2 โรงแรมพลาซ่า"
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-zinc-700 focus:border-amber-400 focus:outline-none text-xs text-zinc-100 bg-zinc-950"
+                    placeholder={t('เช่น ห้อง Grand Ballroom ชั้น 2 โรงแรมพลาซ่า', 'e.g. Grand Ballroom, 2nd Floor')}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-xs text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-950"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  ช่องทางติดต่อทีมงาน / จุดช่วยเหลือ (Helpdesk)
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  {t('ช่องทางติดต่อทีมงาน / จุดช่วยเหลือ (Helpdesk)', 'Helpdesk / Organizer Contact')}
                 </label>
                 <input
                   type="text"
                   value={settingsContact}
                   onChange={(e) => setSettingsContact(e.target.value)}
-                  placeholder="เช่น ฝ่ายบุคคล (HR) หรือ จุดลงทะเบียนหน้าประตู"
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-700 focus:border-amber-400 focus:outline-none text-xs text-zinc-100 bg-zinc-950"
+                  placeholder={t('เช่น ฝ่ายบุคคล (HR) หรือ จุดลงทะเบียนหน้าประตู', 'e.g. HR Desk or Main Entrance')}
+                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-xs text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-950"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  ข้อความหัวบัตรเข้างาน (Digital Pass Header)
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  {t('ข้อความหัวบัตรเข้างาน (Digital Pass Header)', 'Digital Pass Header')}
                 </label>
                 <input
                   type="text"
                   value={settingsTicketTitle}
                   onChange={(e) => setSettingsTicketTitle(e.target.value)}
                   placeholder="OFFICIAL PARTY PASS & TABLE PASS"
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-700 focus:border-amber-400 focus:outline-none text-xs font-mono text-zinc-100 bg-zinc-950"
+                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-xs font-mono text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-950"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                  คำแนะนำหน้าลงทะเบียน (Registration Subtitle)
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                  {t('คำแนะนำหน้าลงทะเบียน (Registration Subtitle)', 'Registration Subtitle')}
                 </label>
                 <input
                   type="text"
                   value={settingsRegSubtitle}
                   onChange={(e) => setSettingsRegSubtitle(e.target.value)}
-                  placeholder="กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อยืนยันตัวตน"
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-700 focus:border-amber-400 focus:outline-none text-xs text-zinc-100 bg-zinc-950"
+                  placeholder={t('กรอกรหัสพนักงาน เบอร์โทรศัพท์ และถ่ายรูปเซลฟี่เพื่อยืนยันตัวตน', 'Enter Employee ID, Phone & Selfie to check in')}
+                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 focus:border-amber-500 dark:focus:border-amber-400 focus:outline-none text-xs text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-950"
                 />
               </div>
             </div>
 
             {/* Live Preview Box */}
-            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800">
-              <div className="text-[11px] font-semibold text-amber-400 mb-2">
-                ตัวอย่างการแสดงผลบนหน้าจอพนักงาน (Live Preview):
+            <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+              <div className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mb-2">
+                {t('ตัวอย่างการแสดงผลบนหน้าจอพนักงาน (Live Preview):', 'Live Attendee Preview:')}
               </div>
-              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-between gap-3">
+              <div className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs font-bold text-zinc-100">{settingsName || 'ชื่องานเลี้ยง'}</div>
-                  <div className="text-[11px] text-amber-400 font-medium">{settingsSubtitle || 'คำโปรยงาน'}</div>
-                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                  <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                    {settingsName || t('ชื่องานเลี้ยง', 'Event Name')}
+                  </div>
+                  <div className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                    {settingsSubtitle || t('คำโปรยงาน', 'Event Subtitle')}
+                  </div>
+                  <div className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5">
                     {settingsVenue} · {settingsDate}
                   </div>
                 </div>
-                <span className="text-[10px] font-mono text-amber-300 font-bold shrink-0">
+                <span className="text-[10px] font-mono text-amber-700 dark:text-amber-300 font-bold shrink-0">
                   {settingsTicketTitle || 'PARTY PASS'}
                 </span>
               </div>
@@ -2021,54 +2152,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className="min-h-[48px] px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-xs flex items-center gap-2 transition active:scale-95 cursor-pointer"
               >
                 <Save className="w-4 h-4" />
-                <span>บันทึกการเปลี่ยนแปลงทั้งหมด</span>
+                <span>{t('บันทึกการเปลี่ยนแปลงทั้งหมด', 'Save All Changes')}</span>
               </button>
             </div>
           </form>
 
           {/* REUSABILITY ZONE */}
-          <div className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
-              <AlertTriangle className="w-5 h-5 text-rose-400" />
+          <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-4 shadow-sm dark:shadow-none">
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+              <AlertTriangle className="w-5 h-5 text-rose-500 dark:text-rose-400" />
               <div>
-                <h3 className="text-sm font-bold text-zinc-100">
-                  เครื่องมือสลับงานเลี้ยง &amp; รีเซ็ตระบบ (Switch Event &amp; Reset Tools)
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  {t('เครื่องมือสลับงานเลี้ยง & รีเซ็ตระบบ (Switch Event & Reset Tools)', 'Switch Event & Reset Tools')}
                 </h3>
-                <p className="text-[11px] text-zinc-400">
-                  สำหรับนำระบบนี้ไปใช้กับงานเลี้ยงถัดไป หรือเคลียร์ข้อมูลเพื่อเริ่มงานจริง
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                  {t(
+                    'สำหรับนำระบบนี้ไปใช้กับงานเลี้ยงถัดไป หรือเคลียร์ข้อมูลเพื่อเริ่มงานจริง',
+                    'Reuse this app for another event or clear test records before go-live.'
+                  )}
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+              <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-rose-400 font-bold text-xs mb-1">
+                  <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold text-xs mb-1">
                     <RotateCcw className="w-4 h-4" />
-                    <span>1. ล้างเฉพาะผู้ลงทะเบียน &amp; ประวัติ Lucky Draw</span>
+                    <span>{t('1. ล้างเฉพาะผู้ลงทะเบียน & ประวัติ Lucky Draw', '1. Clear Registrations & Draw History')}</span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 mb-4 leading-relaxed">
-                    ลบข้อมูลผู้ที่เช็คอินเข้างานและผลการแจกรางวัลทั้งหมด แต่ยังคงรายชื่อพนักงานจากไฟล์ Excel และรายการของรางวัลไว้ตามเดิม
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mb-4 leading-relaxed">
+                    {t(
+                      'ลบข้อมูลผู้ที่เช็คอินเข้างานและผลการแจกรางวัลทั้งหมด แต่ยังคงรายชื่อพนักงานจากไฟล์ Excel และรายการของรางวัลไว้ตามเดิม',
+                      'Removes all check-ins and draw history while keeping your Excel roster and prize list intact.'
+                    )}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleConfirmClearRegistrations}
-                  className="min-h-[44px] w-full px-4 py-2 rounded-xl bg-zinc-900 hover:bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  className="min-h-[44px] w-full px-4 py-2 rounded-xl bg-white dark:bg-zinc-900 hover:bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>ล้างเฉพาะผู้ลงทะเบียน ({registrations.length} คน)</span>
+                  <span>{t(`ล้างเฉพาะผู้ลงทะเบียน (${registrations.length} คน)`, `Clear Check-ins Only (${registrations.length})`)}</span>
                 </button>
               </div>
 
-              <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex flex-col justify-between">
+              <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs mb-1">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs mb-1">
                     <Sparkles className="w-4 h-4" />
-                    <span>2. เริ่มต้นจัดงานเลี้ยงใหม่ทั้งหมด (Start New Event)</span>
+                    <span>{t('2. เริ่มต้นจัดงานเลี้ยงใหม่ทั้งหมด (Start New Event)', '2. Start Brand-New Event')}</span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 mb-4 leading-relaxed">
-                    สร้างงานเลี้ยงใหม่ ตั้งชื่องานใหม่ พร้อมเลือกว่าจะล้างหรือเก็บรายชื่อพนักงานและของรางวัลไว้สำหรับงานครั้งถัดไป
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mb-4 leading-relaxed">
+                    {t(
+                      'สร้างงานเลี้ยงใหม่ ตั้งชื่องานใหม่ พร้อมเลือกว่าจะล้างหรือเก็บรายชื่อพนักงานและของรางวัลไว้สำหรับงานครั้งถัดไป',
+                      'Create a fresh event with a new name and choose whether to reset or keep roster and prizes.'
+                    )}
                   </p>
                 </div>
                 <button
@@ -2080,7 +2220,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="min-h-[44px] w-full px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>เริ่มต้นจัดงานเลี้ยงใหม่</span>
+                  <span>{t('เริ่มต้นจัดงานเลี้ยงใหม่', 'Start New Event')}</span>
                 </button>
               </div>
             </div>
@@ -2091,59 +2231,70 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* START NEW PARTY MODAL */}
       {isNewPartyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-zinc-900 border border-zinc-800 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200 space-y-4">
-            <div className="flex items-center gap-2 text-amber-400">
+          <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
               <Sparkles className="w-6 h-6" />
-              <h3 className="text-lg font-bold text-zinc-100">
-                เริ่มต้นจัดงานเลี้ยงใหม่ (Start New Event)
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                {t('เริ่มต้นจัดงานเลี้ยงใหม่ (Start New Event)', 'Start New Event')}
               </h3>
             </div>
 
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              ระบบจะทำการล้างข้อมูลการลงทะเบียนและผล Lucky Draw เดิมทั้งหมด และเปิดระบบรับลงทะเบียนใหม่สำหรับงานเลี้ยงนี้
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              {t(
+                'ระบบจะทำการล้างข้อมูลการลงทะเบียนและผล Lucky Draw เดิมทั้งหมด และเปิดระบบรับลงทะเบียนใหม่สำหรับงานเลี้ยงนี้',
+                'This will clear existing check-ins and Lucky Draw winners and open registration for your new event.'
+              )}
             </p>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">
-                ชื่องานเลี้ยงใหม่
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                {t('ชื่องานเลี้ยงใหม่', 'New Event Name')}
               </label>
               <input
                 type="text"
                 value={newPartyName}
                 onChange={(e) => setNewPartyName(e.target.value)}
-                placeholder="ระบุชื่องานเลี้ยงใหม่ เช่น งานเลี้ยงพนักงานส่งท้ายปี 2026"
-                className="w-full px-4 py-2.5 rounded-xl border border-zinc-700 bg-zinc-950 text-sm font-bold text-zinc-100 focus:outline-none focus:border-amber-400"
+                placeholder={t('ระบุชื่องานเลี้ยงใหม่ เช่น งานเลี้ยงพนักงานส่งท้ายปี 2026', 'e.g. Year-End Celebration 2026')}
+                className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-sm font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-500 dark:focus:border-amber-400"
               />
             </div>
 
-            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
-              <div className="text-xs font-bold text-zinc-200">ตัวเลือกเพิ่มเติม:</div>
-              <label className="flex items-start gap-2.5 text-xs text-zinc-300 cursor-pointer select-none">
+            <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 space-y-3">
+              <div className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                {t('ตัวเลือกเพิ่มเติม:', 'Additional Options:')}
+              </div>
+              <label className="flex items-start gap-2.5 text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={newPartyClearRoster}
                   onChange={(e) => setNewPartyClearRoster(e.target.checked)}
-                  className="mt-0.5 rounded text-amber-400 focus:ring-amber-400 w-4 h-4 bg-zinc-900 border-zinc-700"
+                  className="mt-0.5 rounded text-amber-400 focus:ring-amber-400 w-4 h-4 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
                 />
                 <div>
-                  <span className="font-bold">ล้างรายชื่อพนักงานเดิมออกทั้งหมด</span>
+                  <span className="font-bold">{t('ล้างรายชื่อพนักงานเดิมออกทั้งหมด', 'Clear existing employee roster')}</span>
                   <p className="text-[11px] text-zinc-500">
-                    เลือกข้อนี้หากต้องการนำเข้าไฟล์ Excel รายชื่อพนักงานชุดใหม่สำหรับงานนี้
+                    {t(
+                      'เลือกข้อนี้หากต้องการนำเข้าไฟล์ Excel รายชื่อพนักงานชุดใหม่สำหรับงานนี้',
+                      'Check this if you plan to upload a fresh Excel employee list.'
+                    )}
                   </p>
                 </div>
               </label>
 
-              <label className="flex items-start gap-2.5 text-xs text-zinc-300 cursor-pointer select-none">
+              <label className="flex items-start gap-2.5 text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={newPartyClearPrizes}
                   onChange={(e) => setNewPartyClearPrizes(e.target.checked)}
-                  className="mt-0.5 rounded text-amber-400 focus:ring-amber-400 w-4 h-4 bg-zinc-900 border-zinc-700"
+                  className="mt-0.5 rounded text-amber-400 focus:ring-amber-400 w-4 h-4 bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700"
                 />
                 <div>
-                  <span className="font-bold">ล้างรายการของรางวัลเดิมทั้งหมด</span>
+                  <span className="font-bold">{t('ล้างรายการของรางวัลเดิมทั้งหมด', 'Clear existing prizes')}</span>
                   <p className="text-[11px] text-zinc-500">
-                    เลือกข้อนี้หากต้องการกำหนดรายการของรางวัลใหม่ทั้งหมดตั้งแต่ต้น
+                    {t(
+                      'เลือกข้อนี้หากต้องการกำหนดรายการของรางวัลใหม่ทั้งหมดตั้งแต่ต้น',
+                      'Check this if you want to set up brand-new prizes from scratch.'
+                    )}
                   </p>
                 </div>
               </label>
@@ -2153,16 +2304,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setIsNewPartyModalOpen(false)}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold cursor-pointer"
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-bold cursor-pointer"
               >
-                ยกเลิก
+                {t('ยกเลิก', 'Cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmNewParty}
                 className="min-h-[44px] px-6 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-bold cursor-pointer active:scale-95 transition"
               >
-                ยืนยันเริ่มงานเลี้ยงใหม่
+                {t('ยืนยันเริ่มงานเลี้ยงใหม่', 'Confirm Start New Event')}
               </button>
             </div>
           </div>
@@ -2172,21 +2323,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* WINNER REVEAL MODAL */}
       {latestWinnerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-zinc-900 border border-amber-400/50 p-6 shadow-2xl text-center relative animate-in zoom-in-95 duration-200">
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 mb-2">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 border border-amber-500/50 dark:border-amber-400/50 p-6 shadow-2xl text-center relative animate-in zoom-in-95 duration-200">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 mb-2">
               <Sparkles className="w-4 h-4" />
-              <span>ขอแสดงความยินดีกับผู้โชคดี</span>
+              <span>{t('ขอแสดงความยินดีกับผู้โชคดี', 'Congratulations to Our Winner')}</span>
             </div>
 
-            <h3 className="text-xl sm:text-2xl font-bold text-zinc-100 mb-0.5">
+            <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-0.5">
               {latestWinnerModal.prizeName}
             </h3>
-            <p className="text-xs text-zinc-400 font-medium mb-4">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 font-medium mb-4">
               {latestWinnerModal.prizeTier}
             </p>
 
             {/* Winner's Selfie Photo Prominently Shown */}
-            <div className="w-32 h-40 mx-auto rounded-2xl overflow-hidden border-2 border-amber-400 shadow-xl bg-zinc-950 mb-4">
+            <div className="w-32 h-40 mx-auto rounded-2xl overflow-hidden border-2 border-amber-500 dark:border-amber-400 shadow-xl bg-zinc-100 dark:bg-zinc-950 mb-4">
               {latestWinnerModal.selfieUrl ? (
                 <img
                   src={latestWinnerModal.selfieUrl}
@@ -2196,28 +2347,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">
-                  ไม่มีรูปถ่าย
+                  {t('ไม่มีรูปถ่าย', 'No Photo')}
                 </div>
               )}
             </div>
 
-            <div className="text-xs font-mono font-bold text-amber-400">
+            <div className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
               {latestWinnerModal.employeeId}
             </div>
-            <h4 className="text-2xl font-bold text-zinc-100 mt-0.5">
+            <h4 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">
               {latestWinnerModal.winnerName}
             </h4>
             {latestWinnerModal.nickname && (
-              <p className="text-sm font-semibold text-amber-300">
-                (คุณ{latestWinnerModal.nickname})
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                ({latestWinnerModal.nickname})
               </p>
             )}
-            <p className="text-xs text-zinc-400 mt-1">
-              แผนก {latestWinnerModal.department}
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
+              {t('แผนก', 'Dept.')} {latestWinnerModal.department}
             </p>
 
-            <div className="mt-4 p-3 rounded-xl bg-zinc-950 border border-amber-400/30 text-amber-300 font-bold text-base">
-              โต๊ะประจำ: {latestWinnerModal.tableNumber}
+            <div className="mt-4 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-amber-500/30 dark:border-amber-400/30 text-amber-700 dark:text-amber-300 font-bold text-base">
+              {t('โต๊ะประจำ:', 'Table:')} {latestWinnerModal.tableNumber}
             </div>
 
             <button
@@ -2228,7 +2379,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }}
               className="mt-6 w-full min-h-[48px] py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-sm active:scale-95 transition cursor-pointer"
             >
-              ตกลงและบันทึกผล
+              {t('ตกลงและบันทึกผล', 'Confirm & Save Result')}
             </button>
           </div>
         </div>
@@ -2252,8 +2403,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           setIsFairChanceUnlocked(true);
         }}
         expectedPin="25102612"
-        title="ปลดล็อคการคัดกรองสิทธิ์"
-        subtitle="กดรหัส PIN 8 หลักเพื่อแสดงเมนูการคัดกรอง & บล็อคกลุ่ม"
+        title={t('ปลดล็อคการคัดกรองสิทธิ์', 'Unlock Fair-Chance Filter')}
+        subtitle={t(
+          'กดรหัส PIN 8 หลักเพื่อแสดงเมนูการคัดกรอง & บล็อคกลุ่ม',
+          'Enter 8-digit PIN to show fair-chance filtering & group blocks'
+        )}
         icon={<ShieldAlert className="w-6 h-6" />}
       />
     </div>

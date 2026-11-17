@@ -4,18 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>PartyPass & Lucky Draw - ระบบลงทะเบียนงานเลี้ยง & สุ่มจับรางวัล</title>
-    <meta name="description" content="เว็บแอพแนว Dark สำหรับลงทะเบียนเข้างานเลี้ยง เซลฟี่ ถ่ายภาพรับโต๊ะ แดชบอร์ดแอดมิน นำเข้า/ส่งออก Excel และระบบสุ่มจับรางวัล Lucky Draw แบบเรียลไทม์" />
+    <meta name="description" content="ระบบลงทะเบียนเข้างานเลี้ยง เซลฟี่ยืนยันตัวตน ตรวจสอบหมายเลขโต๊ะ แดชบอร์ดแอดมิน นำเข้า/ส่งออก Excel และสุ่มจับรางวัล Lucky Draw แบบเรียลไทม์" />
     <meta property="og:title" content="PartyPass & Lucky Draw - ระบบลงทะเบียนงานเลี้ยง & สุ่มจับรางวัล" />
-    <meta property="og:description" content="เว็บแอพแนว Dark สำหรับลงทะเบียนเข้างานเลี้ยง เซลฟี่ ถ่ายภาพรับโต๊ะ แดชบอร์ดแอดมิน นำเข้า/ส่งออก Excel และระบบสุ่มจับรางวัล Lucky Draw แบบเรียลไทม์" />
+    <meta property="og:description" content="ระบบลงทะเบียนเข้างานเลี้ยง เซลฟี่ยืนยันตัวตน ตรวจสอบหมายเลขโต๊ะ แดชบอร์ดแอดมิน นำเข้า/ส่งออก Excel และสุ่มจับรางวัล Lucky Draw แบบเรียลไทม์" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <script>
+      (function () {
+        try {
+          var savedTheme = localStorage.getItem('party_theme_v1');
+          var root = document.documentElement;
+          if (savedTheme === 'light') {
+            root.classList.remove('dark');
+            root.style.colorScheme = 'light';
+          } else {
+            root.classList.add('dark');
+            root.style.colorScheme = 'dark';
+          }
+          var savedLang = localStorage.getItem('party_lang_v1');
+          if (savedLang === 'en' || savedLang === 'th') {
+            root.lang = savedLang;
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-zinc-950 text-zinc-100 antialiased selection:bg-amber-400 selection:text-zinc-950 min-h-screen">
+  <body class="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 antialiased selection:bg-amber-400 selection:text-zinc-950 min-h-screen transition-colors duration-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

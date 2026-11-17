@@ -1,14 +1,16 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
+  query,
   runTransaction,
   setDoc,
-  writeBatch,
   Unsubscribe,
+  WriteBatch,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
@@ -19,7 +21,12 @@ import {
   Prize,
 } from '../types/party';
 import { INITIAL_PRIZES, INITIAL_ROSTER } from '../data/mockEmployees';
-import { handleFirestoreError, OperationType } from '../utils/firestoreErrors';
+import {
+  handleFirestoreError,
+  isOfflineOrNetworkError,
+  isPermissionError,
+  OperationType,
+} from '../utils/firestoreErrors';
 
 const COLLECTIONS = {
   CONFIG: 'config',
@@ -31,6 +38,14 @@ const COLLECTIONS = {
 
 const CONFIG_DOC_ID = 'main';
 const ACTIVE_REG_LOCAL_KEY = 'party_my_registration_id_v1';
+
+const CACHE_KEYS = {
+  CONFIG: 'party_fs_cache_config_v1',
+  ROSTER: 'party_fs_cache_roster_v2',
+  PRIZES: 'party_fs_cache_prizes_v1',
+  REGISTRATIONS: 'party_fs_cache_regs_v1',
+  LUCKY_WINNERS: 'party_fs_cache_winners_v1',
+} as const;
 
 export const DEFAULT_PARTY_CONFIG: PartyConfig = {
   eventName: 'งานเลี้ยงสังสรรค์ (Party Celebration)',
@@ -47,6 +62,24 @@ export const DEFAULT_PARTY_CONFIG: PartyConfig = {
   isVipTriggerActive: false,
   vipActivePrizeId: 'PRIZE-01',
 };
+
+function readCache<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore localStorage quota or private mode errors
+  }
+}
 
 function clip(val: string | undefined | null, maxLen: number): string {
   return String(val ?? '').trim().slice(0, maxLen);
@@ -159,21 +192,66 @@ function sanitizeWinnerPayload(record: LuckyDrawRecord): Record<string, unknown>
   };
 }
 
-async function commitBatchedDeletes(collectionName: string): Promise<void> {
-  try {
-    const snap = await getDocs(collection(db, collectionName));
-    const docs = snap.docs;
-    for (let i = 0; i < docs.length; i += 400) {
-      const batch = writeBatch(db);
-      docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, collectionName);
+async function commitChunked(
+  ops: Array<(batch: WriteBatch) => void>,
+  chunkSize = 350
+): Promise<void> {
+  for (let i = 0; i < ops.length; i += chunkSize) {
+    const batch = writeBatch(db);
+    ops.slice(i, i + chunkSize).forEach((apply) => apply(batch));
+    await batch.commit();
   }
 }
 
+async function commitBatchedDeletes(collectionName: string): Promise<void> {
+  const snap = await getDocs(collection(db, collectionName));
+  if (snap.empty) return;
+  const ops = snap.docs.map((d) => (batch: WriteBatch) => batch.delete(d.ref));
+  await commitChunked(ops, 350);
+}
+
+let seedPromise: Promise<void> | null = null;
+
 export const FirestoreService = {
+  getCachedConfig(): PartyConfig {
+    const cached = readCache<PartyConfig>(CACHE_KEYS.CONFIG);
+    if (!cached) return DEFAULT_PARTY_CONFIG;
+    return {
+      ...DEFAULT_PARTY_CONFIG,
+      ...cached,
+      blockedGroups: Array.isArray(cached.blockedGroups) ? cached.blockedGroups : [],
+    };
+  },
+
+  getCachedRoster(): EmployeeRoster[] {
+    const cached = readCache<EmployeeRoster[]>(CACHE_KEYS.ROSTER);
+    if (Array.isArray(cached) && cached.length > 0) {
+      // Auto-upgrade if cached roster still holds old EMP-1001 placeholder
+      const hasLegacyPlaceholder = cached.some((r) => r.id === 'EMP-1001') && !cached.some((r) => r.id === '7473');
+      if (!hasLegacyPlaceholder) {
+        return cached;
+      }
+    }
+    writeCache(CACHE_KEYS.ROSTER, INITIAL_ROSTER);
+    return INITIAL_ROSTER;
+  },
+
+  getCachedPrizes(): Prize[] {
+    const cached = readCache<Prize[]>(CACHE_KEYS.PRIZES);
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+    return INITIAL_PRIZES;
+  },
+
+  getCachedRegistrations(): AttendeeRegistration[] {
+    const cached = readCache<AttendeeRegistration[]>(CACHE_KEYS.REGISTRATIONS);
+    return Array.isArray(cached) ? cached : [];
+  },
+
+  getCachedLuckyWinners(): LuckyDrawRecord[] {
+    const cached = readCache<LuckyDrawRecord[]>(CACHE_KEYS.LUCKY_WINNERS);
+    return Array.isArray(cached) ? cached : [];
+  },
+
   getMyRegistrationId(): string | null {
     try {
       return localStorage.getItem(ACTIVE_REG_LOCAL_KEY);
@@ -199,29 +277,91 @@ export const FirestoreService = {
   },
 
   async ensureInitialSeed(): Promise<void> {
-    const configRef = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
-    try {
-      const snap = await getDoc(configRef);
-      if (snap.exists()) {
-        return;
+    if (seedPromise) return seedPromise;
+
+    seedPromise = (async () => {
+      const configRef = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
+      try {
+        const snap = await getDoc(configRef);
+
+        if (!snap.exists()) {
+          const ops: Array<(batch: WriteBatch) => void> = [];
+          ops.push((batch) => batch.set(configRef, sanitizeConfigPayload(DEFAULT_PARTY_CONFIG, true)));
+
+          INITIAL_PRIZES.forEach((prize, idx) => {
+            const docId = toSafeDocId('', prize.id);
+            ops.push((batch) =>
+              batch.set(doc(db, COLLECTIONS.PRIZES, docId), sanitizePrizePayload(prize, idx))
+            );
+          });
+
+          INITIAL_ROSTER.forEach((emp) => {
+            const docId = toSafeDocId('', emp.id);
+            ops.push((batch) =>
+              batch.set(doc(db, COLLECTIONS.ROSTER, docId), sanitizeRosterPayload(emp))
+            );
+          });
+
+          await commitChunked(ops, 350);
+          return;
+        }
+
+        // Config already exists — verify roster isn't stuck on old 15-row demo data (EMP-1001..1015) or empty
+        const [firstSheetSnap, legacyDemoSnap, anyRosterSnap, anyPrizeSnap] = await Promise.all([
+          getDoc(doc(db, COLLECTIONS.ROSTER, '7473')),
+          getDoc(doc(db, COLLECTIONS.ROSTER, 'EMP-1001')),
+          getDocs(query(collection(db, COLLECTIONS.ROSTER), limit(1))),
+          getDocs(query(collection(db, COLLECTIONS.PRIZES), limit(1))),
+        ]);
+
+        const ops: Array<(batch: WriteBatch) => void> = [];
+
+        if (anyPrizeSnap.empty) {
+          INITIAL_PRIZES.forEach((prize, idx) => {
+            const docId = toSafeDocId('', prize.id);
+            ops.push((batch) =>
+              batch.set(doc(db, COLLECTIONS.PRIZES, docId), sanitizePrizePayload(prize, idx))
+            );
+          });
+        }
+
+        const shouldUpgradeFromLegacy = !firstSheetSnap.exists() && legacyDemoSnap.exists();
+        const isRosterEmpty = anyRosterSnap.empty;
+
+        if (shouldUpgradeFromLegacy || isRosterEmpty) {
+          if (shouldUpgradeFromLegacy) {
+            for (let n = 1001; n <= 1015; n++) {
+              ops.push((batch) => batch.delete(doc(db, COLLECTIONS.ROSTER, `EMP-${n}`)));
+            }
+          }
+          INITIAL_ROSTER.forEach((emp) => {
+            const docId = toSafeDocId('', emp.id);
+            ops.push((batch) =>
+              batch.set(doc(db, COLLECTIONS.ROSTER, docId), sanitizeRosterPayload(emp))
+            );
+          });
+        }
+
+        if (ops.length > 0) {
+          await commitChunked(ops, 350);
+        }
+      } catch (error) {
+        // Never crash the page when offline or network is temporarily unavailable
+        if (isOfflineOrNetworkError(error)) {
+          console.warn('Firestore unavailable during initial seed; running with Sheets fallback data.');
+          return;
+        }
+        if (isPermissionError(error)) {
+          handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.CONFIG}/${CONFIG_DOC_ID}`);
+        }
+        console.warn('Initial seed warning:', error);
       }
+    })();
 
-      const batch = writeBatch(db);
-      batch.set(configRef, sanitizeConfigPayload(DEFAULT_PARTY_CONFIG, true));
-
-      INITIAL_ROSTER.forEach((emp) => {
-        const docId = toSafeDocId('', emp.id);
-        batch.set(doc(db, COLLECTIONS.ROSTER, docId), sanitizeRosterPayload(emp));
-      });
-
-      INITIAL_PRIZES.forEach((prize, idx) => {
-        const docId = toSafeDocId('', prize.id);
-        batch.set(doc(db, COLLECTIONS.PRIZES, docId), sanitizePrizePayload(prize, idx));
-      });
-
-      await batch.commit();
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.CONFIG}/${CONFIG_DOC_ID}`);
+    try {
+      await seedPromise;
+    } finally {
+      seedPromise = null;
     }
   },
 
@@ -232,17 +372,26 @@ export const FirestoreService = {
       (snap) => {
         if (snap.exists()) {
           const raw = snap.data() as PartyConfig;
-          onData({
+          const merged: PartyConfig = {
             ...DEFAULT_PARTY_CONFIG,
             ...raw,
             blockedGroups: Array.isArray(raw.blockedGroups) ? raw.blockedGroups : [],
-          });
-        } else {
+          };
+          writeCache(CACHE_KEYS.CONFIG, merged);
+          onData(merged);
+        } else if (!snap.metadata.fromCache) {
           onData(DEFAULT_PARTY_CONFIG);
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, `${COLLECTIONS.CONFIG}/${CONFIG_DOC_ID}`);
+        if (isOfflineOrNetworkError(error)) {
+          console.warn('Config listener offline; keeping local config.');
+          return;
+        }
+        if (isPermissionError(error)) {
+          handleFirestoreError(error, OperationType.GET, `${COLLECTIONS.CONFIG}/${CONFIG_DOC_ID}`);
+        }
+        console.warn('Config listener warning:', error);
       }
     );
   },
@@ -251,13 +400,29 @@ export const FirestoreService = {
     return onSnapshot(
       collection(db, COLLECTIONS.ROSTER),
       (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
+        }
         const list = snap.docs
           .map((d) => d.data() as EmployeeRoster)
           .sort((a, b) => a.id.localeCompare(b.id));
-        onData(list);
+        if (list.length > 0) {
+          writeCache(CACHE_KEYS.ROSTER, list);
+          onData(list);
+        } else if (!snap.metadata.fromCache) {
+          writeCache(CACHE_KEYS.ROSTER, []);
+          onData([]);
+        }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, COLLECTIONS.ROSTER);
+        if (isOfflineOrNetworkError(error)) {
+          console.warn('Roster listener offline; keeping Sheets reference roster.');
+          return;
+        }
+        if (isPermissionError(error)) {
+          handleFirestoreError(error, OperationType.LIST, COLLECTIONS.ROSTER);
+        }
+        console.warn('Roster listener warning:', error);
       }
     );
   },
@@ -266,13 +431,29 @@ export const FirestoreService = {
     return onSnapshot(
       collection(db, COLLECTIONS.PRIZES),
       (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
+        }
         const list = snap.docs
           .map((d) => d.data() as Prize & { sortOrder?: number })
           .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
-        onData(list);
+        if (list.length > 0) {
+          writeCache(CACHE_KEYS.PRIZES, list);
+          onData(list);
+        } else if (!snap.metadata.fromCache) {
+          writeCache(CACHE_KEYS.PRIZES, []);
+          onData([]);
+        }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, COLLECTIONS.PRIZES);
+        if (isOfflineOrNetworkError(error)) {
+          console.warn('Prizes listener offline; keeping cached prizes.');
+          return;
+        }
+        if (isPermissionError(error)) {
+          handleFirestoreError(error, OperationType.LIST, COLLECTIONS.PRIZES);
+        }
+        console.warn('Prizes listener warning:', error);
       }
     );
   },
@@ -281,13 +462,24 @@ export const FirestoreService = {
     return onSnapshot(
       collection(db, COLLECTIONS.REGISTRATIONS),
       (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
+        }
         const list = snap.docs
           .map((d) => d.data() as AttendeeRegistration)
           .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
+        writeCache(CACHE_KEYS.REGISTRATIONS, list);
         onData(list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, COLLECTIONS.REGISTRATIONS);
+        if (isOfflineOrNetworkError(error)) {
+          console.warn('Registrations listener offline; keeping local registrations cache.');
+          return;
+        }
+        if (isPermissionError(error)) {
+          handleFirestoreError(error, OperationType.LIST, COLLECTIONS.REGISTRATIONS);
+        }
+        console.warn('Registrations listener warning:', error);
       }
     );
   },
@@ -296,27 +488,44 @@ export const FirestoreService = {
     return onSnapshot(
       collection(db, COLLECTIONS.LUCKY_WINNERS),
       (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
+        }
         const list = snap.docs
           .map((d) => d.data() as LuckyDrawRecord)
           .sort((a, b) => b.round - a.round || b.wonAt.localeCompare(a.wonAt));
+        writeCache(CACHE_KEYS.LUCKY_WINNERS, list);
         onData(list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, COLLECTIONS.LUCKY_WINNERS);
+        if (isOfflineOrNetworkError(error)) {
+          console.warn('Winners listener offline; keeping local winners cache.');
+          return;
+        }
+        if (isPermissionError(error)) {
+          handleFirestoreError(error, OperationType.LIST, COLLECTIONS.LUCKY_WINNERS);
+        }
+        console.warn('Winners listener warning:', error);
       }
     );
   },
 
   async setConfig(config: PartyConfig): Promise<void> {
+    writeCache(CACHE_KEYS.CONFIG, config);
     const path = `${COLLECTIONS.CONFIG}/${CONFIG_DOC_ID}`;
     try {
       await setDoc(doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID), sanitizeConfigPayload(config, true));
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Saved config locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, path);
     }
   },
 
   async setRoster(roster: EmployeeRoster[]): Promise<void> {
+    writeCache(CACHE_KEYS.ROSTER, roster);
     try {
       const existingSnap = await getDocs(collection(db, COLLECTIONS.ROSTER));
       const newMap = new Map<string, EmployeeRoster>();
@@ -325,29 +534,23 @@ export const FirestoreService = {
         newMap.set(docId, emp);
       });
 
-      const ops: Array<{ type: 'delete' | 'set'; docId: string; data?: EmployeeRoster }> = [];
+      const ops: Array<(batch: WriteBatch) => void> = [];
       existingSnap.docs.forEach((d) => {
         if (!newMap.has(d.id)) {
-          ops.push({ type: 'delete', docId: d.id });
+          ops.push((batch) => batch.delete(d.ref));
         }
       });
       newMap.forEach((emp, docId) => {
-        ops.push({ type: 'set', docId, data: emp });
+        const ref = doc(db, COLLECTIONS.ROSTER, docId);
+        ops.push((batch) => batch.set(ref, sanitizeRosterPayload(emp)));
       });
 
-      for (let i = 0; i < ops.length; i += 400) {
-        const batch = writeBatch(db);
-        ops.slice(i, i + 400).forEach((op) => {
-          const ref = doc(db, COLLECTIONS.ROSTER, op.docId);
-          if (op.type === 'delete') {
-            batch.delete(ref);
-          } else if (op.data) {
-            batch.set(ref, sanitizeRosterPayload(op.data));
-          }
-        });
-        await batch.commit();
-      }
+      await commitChunked(ops, 350);
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Saved roster locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.ROSTER);
     }
   },
@@ -355,17 +558,27 @@ export const FirestoreService = {
   async addRegistration(registration: AttendeeRegistration): Promise<AttendeeRegistration> {
     const docId = toSafeDocId('REG_', registration.employeeId.toUpperCase());
     const payload = sanitizeRegistrationPayload(registration, docId);
+    const saved = payload as unknown as AttendeeRegistration;
     const path = `${COLLECTIONS.REGISTRATIONS}/${docId}`;
+
+    this.setMyRegistrationId(docId);
+    const cached = this.getCachedRegistrations().filter((r) => r.id !== docId);
+    writeCache(CACHE_KEYS.REGISTRATIONS, [saved, ...cached]);
+
     try {
       await setDoc(doc(db, COLLECTIONS.REGISTRATIONS, docId), payload);
-      this.setMyRegistrationId(docId);
-      return payload as unknown as AttendeeRegistration;
+      return saved;
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Registration cached locally (Firestore offline).');
+        return saved;
+      }
       handleFirestoreError(error, OperationType.WRITE, path);
     }
   },
 
   async setPrizes(prizes: Prize[]): Promise<void> {
+    writeCache(CACHE_KEYS.PRIZES, prizes);
     try {
       const existingSnap = await getDocs(collection(db, COLLECTIONS.PRIZES));
       const newMap = new Map<string, { prize: Prize; index: number }>();
@@ -374,29 +587,23 @@ export const FirestoreService = {
         newMap.set(docId, { prize: { ...p, id: docId }, index: idx });
       });
 
-      const ops: Array<{ type: 'delete' | 'set'; docId: string; prize?: Prize; index?: number }> = [];
+      const ops: Array<(batch: WriteBatch) => void> = [];
       existingSnap.docs.forEach((d) => {
         if (!newMap.has(d.id)) {
-          ops.push({ type: 'delete', docId: d.id });
+          ops.push((batch) => batch.delete(d.ref));
         }
       });
       newMap.forEach(({ prize, index }, docId) => {
-        ops.push({ type: 'set', docId, prize, index });
+        const ref = doc(db, COLLECTIONS.PRIZES, docId);
+        ops.push((batch) => batch.set(ref, sanitizePrizePayload(prize, index)));
       });
 
-      for (let i = 0; i < ops.length; i += 400) {
-        const batch = writeBatch(db);
-        ops.slice(i, i + 400).forEach((op) => {
-          const ref = doc(db, COLLECTIONS.PRIZES, op.docId);
-          if (op.type === 'delete') {
-            batch.delete(ref);
-          } else if (op.prize) {
-            batch.set(ref, sanitizePrizePayload(op.prize, op.index ?? 0));
-          }
-        });
-        await batch.commit();
-      }
+      await commitChunked(ops, 350);
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Saved prizes locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.PRIZES);
     }
   },
@@ -408,6 +615,12 @@ export const FirestoreService = {
     const prizeRef = doc(db, COLLECTIONS.PRIZES, prizeId);
     const configRef = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
 
+    // Update local cache optimistically
+    const normalizedWinner: LuckyDrawRecord = { ...record, id: winnerId, prizeId };
+    const cachedWinners = this.getCachedLuckyWinners().filter((w) => w.id !== winnerId);
+    writeCache(CACHE_KEYS.LUCKY_WINNERS, [normalizedWinner, ...cachedWinners]);
+    writeCache(CACHE_KEYS.CONFIG, { ...currentConfig, isVipTriggerActive: false });
+
     try {
       await runTransaction(db, async (tx) => {
         const prizeSnap = await tx.get(prizeRef);
@@ -417,14 +630,7 @@ export const FirestoreService = {
         const prizeData = prizeSnap.data() as Prize & { sortOrder?: number };
         const nextRemaining = Math.max(0, Math.floor(Number(prizeData.remaining) || 0) - 1);
 
-        tx.set(
-          winnerRef,
-          sanitizeWinnerPayload({
-            ...record,
-            id: winnerId,
-            prizeId,
-          })
-        );
+        tx.set(winnerRef, sanitizeWinnerPayload(normalizedWinner));
         tx.set(
           prizeRef,
           sanitizePrizePayload(
@@ -448,6 +654,10 @@ export const FirestoreService = {
         );
       });
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Lucky winner updated locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.LUCKY_WINNERS}/${winnerId}`);
     }
   },
@@ -457,6 +667,9 @@ export const FirestoreService = {
     const prizeId = toSafeDocId('', record.prizeId);
     const winnerRef = doc(db, COLLECTIONS.LUCKY_WINNERS, winnerId);
     const prizeRef = doc(db, COLLECTIONS.PRIZES, prizeId);
+
+    const cachedWinners = this.getCachedLuckyWinners().filter((w) => w.id !== winnerId);
+    writeCache(CACHE_KEYS.LUCKY_WINNERS, cachedWinners);
 
     try {
       await runTransaction(db, async (tx) => {
@@ -481,43 +694,64 @@ export const FirestoreService = {
         }
       });
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Winner removal cached locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.LUCKY_WINNERS}/${winnerId}`);
     }
   },
 
   async resetAllLuckyDraws(prizes: Prize[]): Promise<void> {
+    writeCache(CACHE_KEYS.LUCKY_WINNERS, []);
+    writeCache(
+      CACHE_KEYS.PRIZES,
+      prizes.map((p) => ({ ...p, remaining: p.quantity }))
+    );
+
     try {
       await commitBatchedDeletes(COLLECTIONS.LUCKY_WINNERS);
-      const batch = writeBatch(db);
-      prizes.forEach((p, idx) => {
+      const ops = prizes.map((p, idx) => {
         const docId = toSafeDocId('', p.id);
-        batch.set(
-          doc(db, COLLECTIONS.PRIZES, docId),
-          sanitizePrizePayload({ ...p, id: docId, remaining: p.quantity }, idx)
-        );
+        return (batch: WriteBatch) =>
+          batch.set(
+            doc(db, COLLECTIONS.PRIZES, docId),
+            sanitizePrizePayload({ ...p, id: docId, remaining: p.quantity }, idx)
+          );
       });
-      await batch.commit();
+      await commitChunked(ops, 350);
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Reset lucky draws cached locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.LUCKY_WINNERS);
     }
   },
 
   async clearRegistrations(prizes: Prize[]): Promise<void> {
+    writeCache(CACHE_KEYS.REGISTRATIONS, []);
+    writeCache(CACHE_KEYS.LUCKY_WINNERS, []);
+    this.clearMyRegistrationId();
+
     try {
       await commitBatchedDeletes(COLLECTIONS.REGISTRATIONS);
       await commitBatchedDeletes(COLLECTIONS.LUCKY_WINNERS);
-      this.clearMyRegistrationId();
 
-      const batch = writeBatch(db);
-      prizes.forEach((p, idx) => {
+      const ops = prizes.map((p, idx) => {
         const docId = toSafeDocId('', p.id);
-        batch.set(
-          doc(db, COLLECTIONS.PRIZES, docId),
-          sanitizePrizePayload({ ...p, id: docId, remaining: p.quantity }, idx)
-        );
+        return (batch: WriteBatch) =>
+          batch.set(
+            doc(db, COLLECTIONS.PRIZES, docId),
+            sanitizePrizePayload({ ...p, id: docId, remaining: p.quantity }, idx)
+          );
       });
-      await batch.commit();
+      await commitChunked(ops, 350);
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Clear registrations cached locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.DELETE, COLLECTIONS.REGISTRATIONS);
     }
   },
@@ -528,37 +762,48 @@ export const FirestoreService = {
     newConfig?: Partial<PartyConfig>,
     options: { clearRoster?: boolean; clearPrizes?: boolean } = {}
   ): Promise<void> {
+    writeCache(CACHE_KEYS.REGISTRATIONS, []);
+    writeCache(CACHE_KEYS.LUCKY_WINNERS, []);
+    this.clearMyRegistrationId();
+
+    const updatedConfig: PartyConfig = {
+      ...currentConfig,
+      ...newConfig,
+      isRegistrationOpen: true,
+      isVipTriggerActive: false,
+    };
+    writeCache(CACHE_KEYS.CONFIG, updatedConfig);
+
     try {
       await commitBatchedDeletes(COLLECTIONS.REGISTRATIONS);
       await commitBatchedDeletes(COLLECTIONS.LUCKY_WINNERS);
-      this.clearMyRegistrationId();
 
       if (options.clearRoster) {
+        writeCache(CACHE_KEYS.ROSTER, []);
         await commitBatchedDeletes(COLLECTIONS.ROSTER);
       }
 
       if (options.clearPrizes) {
+        writeCache(CACHE_KEYS.PRIZES, []);
         await commitBatchedDeletes(COLLECTIONS.PRIZES);
       } else {
-        const batch = writeBatch(db);
-        prizes.forEach((p, idx) => {
+        const ops = prizes.map((p, idx) => {
           const docId = toSafeDocId('', p.id);
-          batch.set(
-            doc(db, COLLECTIONS.PRIZES, docId),
-            sanitizePrizePayload({ ...p, id: docId, remaining: p.quantity }, idx)
-          );
+          return (batch: WriteBatch) =>
+            batch.set(
+              doc(db, COLLECTIONS.PRIZES, docId),
+              sanitizePrizePayload({ ...p, id: docId, remaining: p.quantity }, idx)
+            );
         });
-        await batch.commit();
+        await commitChunked(ops, 350);
       }
 
-      const updatedConfig: PartyConfig = {
-        ...currentConfig,
-        ...newConfig,
-        isRegistrationOpen: true,
-        isVipTriggerActive: false,
-      };
       await this.setConfig(updatedConfig);
     } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Start new party cached locally (Firestore offline).');
+        return;
+      }
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.CONFIG);
     }
   },
