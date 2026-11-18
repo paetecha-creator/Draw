@@ -4,6 +4,7 @@ import { Prize } from '../types/party';
 import { soundFX } from '../utils/audio';
 import { compressImageDataUrl } from '../utils/imageCompress';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { PartyDialogModal, PartyDialogState } from './PartyDialogModal';
 
 interface PrizeManagerModalProps {
   isOpen: boolean;
@@ -28,6 +29,13 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
   const [description, setDescription] = useState(prizeToEdit?.description || '');
   const [imageUrl, setImageUrl] = useState(prizeToEdit?.imageUrl || '');
   const [imagePreview, setImagePreview] = useState(prizeToEdit?.imageUrl || '');
+  const [dialog, setDialog] = useState<PartyDialogState>({
+    isOpen: false,
+    mode: 'alert',
+    variant: 'warning',
+    title: '',
+    message: '',
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
@@ -71,7 +79,13 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      alert(t('กรุณาระบุชื่อของรางวัล', 'Please enter a prize name'));
+      setDialog({
+        isOpen: true,
+        mode: 'alert',
+        variant: 'warning',
+        title: t('ข้อมูลไม่ครบถ้วน', 'Missing Information'),
+        message: t('กรุณาระบุชื่อของรางวัลก่อนบันทึก', 'Please enter a prize name before saving.'),
+      });
       return;
     }
 
@@ -81,12 +95,16 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
     const numQty = Math.max(1, Math.floor(Number(quantity) || 1));
 
     if (prizeToEdit && numQty < drawnCount) {
-      alert(
-        t(
+      setDialog({
+        isOpen: true,
+        mode: 'alert',
+        variant: 'warning',
+        title: t('ไม่สามารถลดจำนวนของรางวัลได้', 'Invalid Prize Quantity'),
+        message: t(
           `รางวัลนี้ถูกจับแจกไปแล้ว ${drawnCount} ชิ้น ไม่สามารถตั้งจำนวนรวมน้อยกว่า ${drawnCount} ได้`,
           `This prize already has ${drawnCount} drawn winner(s). Quantity cannot be less than ${drawnCount}.`
-        )
-      );
+        ),
+      });
       return;
     }
 
@@ -310,17 +328,22 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (
-                    confirm(
-                      t(
-                        `คุณต้องการลบรางวัล "${prizeToEdit.name}" หรือไม่?`,
-                        `Delete prize "${prizeToEdit.name}"?`
-                      )
-                    )
-                  ) {
-                    onDelete(prizeToEdit.id);
-                    onClose();
-                  }
+                  soundFX.playClick();
+                  setDialog({
+                    isOpen: true,
+                    mode: 'confirm',
+                    variant: 'danger',
+                    title: t('ยืนยันการลบของรางวัล', 'Confirm Delete Prize'),
+                    message: t(
+                      `คุณต้องการลบรางวัล "${prizeToEdit.name}" ออกจากรายการหรือไม่?`,
+                      `Are you sure you want to delete prize "${prizeToEdit.name}"?`
+                    ),
+                    confirmText: t('ลบรางวัล', 'Delete'),
+                    onConfirmAction: () => {
+                      onDelete(prizeToEdit.id);
+                      onClose();
+                    },
+                  });
                 }}
                 className="min-h-[44px] px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 dark:text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                 title={t('ลบรางวัลนี้', 'Delete Prize')}
@@ -340,6 +363,11 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
           </div>
         </form>
       </div>
+
+      <PartyDialogModal
+        dialog={dialog}
+        onClose={() => setDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

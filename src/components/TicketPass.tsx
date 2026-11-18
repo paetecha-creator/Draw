@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { Sparkles, Trophy, MapPin, Calendar, CheckCircle2, QrCode, ArrowRight, Share2, Phone } from 'lucide-react';
 import { AttendeeRegistration, PartyConfig } from '../types/party';
 import { soundFX } from '../utils/audio';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { PartyDialogModal, PartyDialogState } from './PartyDialogModal';
 
 interface TicketPassProps {
   registration: AttendeeRegistration;
@@ -19,6 +20,13 @@ export const TicketPass: React.FC<TicketPassProps> = ({
   onRegisterAnother,
 }) => {
   const { t } = usePreferences();
+  const [dialog, setDialog] = useState<PartyDialogState>({
+    isOpen: false,
+    mode: 'alert',
+    variant: 'success',
+    title: '',
+    message: '',
+  });
 
   useEffect(() => {
     soundFX.playCelebrationChime();
@@ -169,12 +177,16 @@ export const TicketPass: React.FC<TicketPassProps> = ({
                   ),
                 }).catch(() => {});
               } else {
-                alert(
-                  t(
-                    `บัตรลงทะเบียนสำเร็จ!\nชื่อ: ${registration.fullName}\nโต๊ะ: ${registration.tableNumber}`,
-                    `Check-in Verified!\nName: ${registration.fullName}\nTable: ${registration.tableNumber}`
-                  )
-                );
+                setDialog({
+                  isOpen: true,
+                  mode: 'alert',
+                  variant: 'success',
+                  title: t('บัตรลงทะเบียนสำเร็จ!', 'Check-in Verified!'),
+                  message: t(
+                    `ชื่อ: ${registration.fullName}\nรหัสพนักงาน: ${registration.employeeId}\nหมายเลขโต๊ะ: ${registration.tableNumber}`,
+                    `Name: ${registration.fullName}\nEmployee ID: ${registration.employeeId}\nAssigned Table: ${registration.tableNumber}`
+                  ),
+                });
               }
             }}
             className="flex-1 min-h-[44px] py-2 px-3 rounded-xl bg-white dark:bg-violet-950/70 hover:bg-fuchsia-50 dark:hover:bg-violet-900 text-zinc-800 dark:text-zinc-100 text-xs font-bold border border-fuchsia-300/60 dark:border-violet-700 flex items-center justify-center gap-1.5 transition cursor-pointer"
@@ -195,6 +207,11 @@ export const TicketPass: React.FC<TicketPassProps> = ({
           </button>
         </div>
       </div>
+
+      <PartyDialogModal
+        dialog={dialog}
+        onClose={() => setDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

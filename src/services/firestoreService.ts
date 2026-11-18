@@ -2,7 +2,9 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
+  getDocsFromServer,
   limit,
   onSnapshot,
   query,
@@ -563,16 +565,93 @@ export const FirestoreService = {
     );
   },
 
+  async refreshConfigFromServer(): Promise<PartyConfig | null> {
+    try {
+      const ref = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
+      let snap;
+      try {
+        snap = await getDocFromServer(ref);
+      } catch {
+        snap = await getDoc(ref);
+      }
+      if (snap.exists()) {
+        const raw = snap.data() as PartyConfig;
+        const merged: PartyConfig = {
+          ...DEFAULT_PARTY_CONFIG,
+          ...raw,
+          blockedGroups: Array.isArray(raw.blockedGroups) ? raw.blockedGroups : [],
+        };
+        writeCache(CACHE_KEYS.CONFIG, merged);
+        return merged;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  async refreshLiveCollectionsFromServer(): Promise<{
+    prizes?: Prize[];
+    registrations?: AttendeeRegistration[];
+    luckyWinners?: LuckyDrawRecord[];
+  }> {
+    const result: {
+      prizes?: Prize[];
+      registrations?: AttendeeRegistration[];
+      luckyWinners?: LuckyDrawRecord[];
+    } = {};
+
+    try {
+      const [prizeSnap, regSnap, winnerSnap] = await Promise.all([
+        getDocsFromServer(collection(db, COLLECTIONS.PRIZES)),
+        getDocsFromServer(collection(db, COLLECTIONS.REGISTRATIONS)),
+        getDocsFromServer(collection(db, COLLECTIONS.LUCKY_WINNERS)),
+      ]);
+
+      const prizesList = prizeSnap.docs
+        .map((d) => d.data() as Prize & { sortOrder?: number })
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
+      if (prizesList.length > 0) {
+        writeCache(CACHE_KEYS.PRIZES, prizesList);
+        result.prizes = prizesList;
+      }
+
+      const regsList = regSnap.docs
+        .map((d) => d.data() as AttendeeRegistration)
+        .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
+      writeCache(CACHE_KEYS.REGISTRATIONS, regsList);
+      result.registrations = regsList;
+
+      const winnersList = winnerSnap.docs
+        .map((d) => d.data() as LuckyDrawRecord)
+        .sort((a, b) => b.round - a.round || b.wonAt.localeCompare(a.wonAt));
+      writeCache(CACHE_KEYS.LUCKY_WINNERS, winnersList);
+      result.luckyWinners = winnersList;
+    } catch {
+      // Ignore silent background sync errors when offline
+    }
+    return result;
+  },
+
   async setConfig(config: PartyConfig): Promise<void> {
     writeCache(CACHE_KEYS.CONFIG, config);
     emitLocalSync('config');
     const path = `${COLLECTIONS.CONFIG}/${CONFIG_DOC_ID}`;
+    const ref = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
+    const payload = sanitizeConfigPayload(config, true);
+
     try {
-      await setDoc(doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID), sanitizeConfigPayload(config, true));
+      await setDoc(ref, payload);
     } catch (error) {
       if (isOfflineOrNetworkError(error)) {
-        console.warn('Saved config locally (Firestore offline).');
-        return;
+        // Retry once cleanly in case of transient mobile/edge connection blip
+        try {
+          await setDoc(ref, payload);
+          return;
+        } catch {
+          console.warn('Saved config locally (Firestore offline).');
+          return;
+        }
       }
       if (isPermissionError(error)) {
         handleFirestoreError(error, OperationType.WRITE, path);

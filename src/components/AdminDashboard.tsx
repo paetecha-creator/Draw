@@ -59,6 +59,7 @@ import {
 import { soundFX } from '../utils/audio';
 import { PrizeManagerModal } from './PrizeManagerModal';
 import { NumpadPinModal } from './NumpadPinModal';
+import { PartyDialogModal, PartyDialogState, PartyDialogVariant } from './PartyDialogModal';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 interface AdminDashboardProps {
@@ -127,6 +128,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const shownTimeoutForWinnerRef = useRef<string | null>(null);
 
   const [soundMuted, setSoundMuted] = useState(soundFX.getMuted());
+  const [dialog, setDialog] = useState<PartyDialogState>({
+    isOpen: false,
+    mode: 'alert',
+    variant: 'warning',
+    title: '',
+    message: '',
+  });
+
+  const showAlertDialog = (opts: {
+    variant?: PartyDialogVariant;
+    title: string;
+    message: string;
+    confirmText?: string;
+  }) => {
+    setDialog({
+      isOpen: true,
+      mode: 'alert',
+      variant: opts.variant || 'warning',
+      title: opts.title,
+      message: opts.message,
+      confirmText: opts.confirmText,
+    });
+  };
+
+  const showConfirmDialog = (opts: {
+    variant?: PartyDialogVariant;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }) => {
+    setDialog({
+      isOpen: true,
+      mode: 'confirm',
+      variant: opts.variant || 'danger',
+      title: opts.title,
+      message: opts.message,
+      confirmText: opts.confirmText,
+      cancelText: opts.cancelText,
+      onConfirmAction: opts.onConfirm,
+    });
+  };
   const [excelImportLoading, setExcelImportLoading] = useState(false);
   const [excelImportMessage, setExcelImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copyLinkNotice, setCopyLinkNotice] = useState(false);
@@ -213,26 +257,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleConfirmClearRegistrations = () => {
-    if (
-      confirm(
-        t(
-          'คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลผู้ลงทะเบียนและประวัติการสุ่มรางวัลทั้งหมดสำหรับงานนี้? (รายชื่อพนักงานใน Excel และของรางวัลจะยังคงอยู่)',
-          'Are you sure you want to clear all registrations and Lucky Draw history for this event? (Employee Excel roster and prizes will be preserved)'
-        )
-      )
-    ) {
-      soundFX.playClick();
-      if (onClearRegistrations) {
-        onClearRegistrations();
-      }
-      setSettingsSavedNotice(
-        t(
-          'ล้างข้อมูลผู้ลงทะเบียนและประวัติ Lucky Draw เรียบร้อยแล้ว',
-          'Registrations and Lucky Draw history have been cleared.'
-        )
-      );
-      setTimeout(() => setSettingsSavedNotice(null), 4000);
-    }
+    soundFX.playClick();
+    showConfirmDialog({
+      variant: 'danger',
+      title: t('ยืนยันการล้างข้อมูลลงทะเบียน', 'Clear All Registrations?'),
+      message: t(
+        'คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลผู้ลงทะเบียนและประวัติการสุ่มรางวัลทั้งหมดสำหรับงานนี้?\n(รายชื่อพนักงานใน Excel และของรางวัลจะยังคงอยู่)',
+        'Are you sure you want to clear all check-ins and Lucky Draw history for this event?\n(Employee Excel roster and prizes will be preserved)'
+      ),
+      confirmText: t('ล้างข้อมูลลงทะเบียน', 'Clear Registrations'),
+      onConfirm: () => {
+        if (onClearRegistrations) {
+          onClearRegistrations();
+        }
+        setSettingsSavedNotice(
+          t(
+            'ล้างข้อมูลผู้ลงทะเบียนและประวัติ Lucky Draw เรียบร้อยแล้ว',
+            'Registrations and Lucky Draw history have been cleared.'
+          )
+        );
+        setTimeout(() => setSettingsSavedNotice(null), 4000);
+      },
+    });
   };
 
   const handleConfirmNewParty = () => {
@@ -277,9 +323,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleToggleRegistration = () => {
     soundFX.playClick();
+    const nextRegOpen = !config.isRegistrationOpen;
     onUpdateConfig({
       ...config,
-      isRegistrationOpen: !config.isRegistrationOpen,
+      isRegistrationOpen: nextRegOpen,
+      isVipTriggerActive: nextRegOpen ? false : config.isVipTriggerActive,
     });
   };
 
@@ -541,13 +589,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const nextState = !config.isVipTriggerActive;
 
     if (nextState) {
+      if (config.isRegistrationOpen) {
+        showAlertDialog({
+          variant: 'warning',
+          title: t('กรุณาปิดรับลงทะเบียนก่อนเปิดสิทธิ์ผู้บริหาร', 'Close Registration First'),
+          message: t(
+            'ระบบกำลังเปิดรับลงทะเบียนเข้างานอยู่ จึงยังไม่สามารถเปิดสิทธิ์ปุ่มผู้บริหาร (LUCKY DRAW) ได้\n\nกรุณากดปุ่ม "สถานะ: เปิดลงทะเบียน" ด้านบนขวาให้เป็น "ปิดระบบแล้ว" ก่อนเริ่มเปิดสิทธิ์สุ่มรางวัล',
+            'Registration is currently open. Please close check-in registration using the status toggle at the top before unlocking the Executive Lucky Draw button.'
+          ),
+        });
+        return;
+      }
+
       if (eligibleCandidates.length === 0) {
-        alert(
-          t(
-            'ยังไม่มีผู้ร่วมงานที่มีสิทธิ์ลุ้นรางวัล (ต้องลงทะเบียนเข้างานแล้วและไม่ติดบล็อค)',
-            'No eligible checked-in candidates available yet.'
-          )
-        );
+        showAlertDialog({
+          variant: 'warning',
+          title: t('ยังไม่มีผู้มีสิทธิ์ลุ้นรางวัล', 'No Eligible Candidates'),
+          message: t(
+            'ยังไม่มีผู้ร่วมงานที่มีสิทธิ์ลุ้นรางวัล (ต้องมีผู้ลงทะเบียนเข้างานแล้วและไม่ติดสถานะบล็อค)',
+            'No eligible checked-in candidates available yet (guests must be checked in and unblocked).'
+          ),
+        });
         return;
       }
 
@@ -556,12 +618,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         prizes.find((p) => getTrueRemaining(p) > 0);
 
       if (!targetPrize) {
-        alert(
-          t(
+        showAlertDialog({
+          variant: 'warning',
+          title: t('แจกของรางวัลครบทั้งหมดแล้ว', 'All Prizes Claimed'),
+          message: t(
             'ของรางวัลทั้งหมดถูกแจกครบแล้ว กรุณาเพิ่มของรางวัลก่อนเปิดสิทธิ์ผู้บริหาร',
             'All prizes have been claimed. Please add prizes before unlocking VIP.'
-          )
-        );
+          ),
+        });
         return;
       }
 
@@ -619,17 +683,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (isDrawingRef.current) return;
 
     if (!targetPrize) {
-      alert(t('กรุณาเลือกรางวัลที่จะทำการสุ่มจับ', 'Please select a prize to draw.'));
+      showAlertDialog({
+        variant: 'warning',
+        title: t('ยังไม่ได้เลือกของรางวัล', 'No Prize Selected'),
+        message: t('กรุณาเลือกรางวัลที่จะทำการสุ่มจับก่อน', 'Please select a prize to draw first.'),
+      });
       return;
     }
 
     if (!options?.ignoreStockCheck && getTrueRemaining(targetPrize) <= 0) {
-      alert(
-        t(
+      showAlertDialog({
+        variant: 'warning',
+        title: t('ของรางวัลหมดแล้ว', 'Prize Out of Stock'),
+        message: t(
           `รางวัล "${targetPrize.name}" ถูกแจกครบตามจำนวนแล้ว ไม่สามารถจับเกินจำนวนได้`,
           `Prize "${targetPrize.name}" has no remaining stock.`
-        )
-      );
+        ),
+      });
       return;
     }
 
@@ -639,12 +709,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
 
     if (candidatePool.length === 0) {
-      alert(
-        t(
+      showAlertDialog({
+        variant: 'warning',
+        title: t('ไม่มีผู้มีสิทธิ์ลุ้นรางวัล', 'No Eligible Candidates'),
+        message: t(
           'ไม่มีผู้มีสิทธิ์ลุ้นรางวัลที่ตรงตามเงื่อนไข (อาจแจกครบทุกคนแล้ว หรือถูกตัดสิทธิ์/บล็อคทั้งหมด)',
           'No eligible candidates remain (everyone may have won or is blocked).'
-        )
-      );
+        ),
+      });
       return;
     }
 
@@ -744,12 +816,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         (att) => att.employeeId.trim().toUpperCase() !== forfeitedEmpUpper
       );
       if (nextEligible.length === 0) {
-        alert(
-          t(
+        showAlertDialog({
+          variant: 'warning',
+          title: t('ไม่มีผู้มีสิทธิ์คงเหลือสำหรับจับใหม่', 'No Eligible Candidates Left'),
+          message: t(
             'ตัดสิทธิ์ผู้ไม่มารับรางวัลแล้ว แต่ไม่มีผู้มีสิทธิ์ลุ้นรางวัลคงเหลือสำหรับจับใหม่',
             'Winner disqualified & prize returned, but no eligible candidates remain for re-draw.'
-          )
-        );
+          ),
+        });
         return;
       }
       setTimeout(() => {
@@ -1019,6 +1093,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             className={`min-h-[42px] px-4 py-2 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-md ${
               config.isVipTriggerActive
                 ? 'bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white'
+                : config.isRegistrationOpen
+                ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-400/60 shadow-none'
                 : 'bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white'
             }`}
           >
@@ -1026,6 +1102,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <>
                 <Lock className="w-3.5 h-3.5" />
                 <span>{t('ล็อกปุ่มผู้บริหาร', 'Lock VIP')}</span>
+              </>
+            ) : config.isRegistrationOpen ? (
+              <>
+                <Lock className="w-3.5 h-3.5" />
+                <span>{t('เปิดสิทธิ์ผู้บริหารกดรอบนี้', 'Unlock VIP Round')}</span>
               </>
             ) : (
               <>
@@ -1149,16 +1230,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               type="button"
               disabled={isDrawing}
               onClick={() => {
-                if (
-                  confirm(
-                    t(
-                      `ยืนยันตัดสิทธิ์ "${luckyWinners[0].winnerName}" (${luckyWinners[0].employeeId}) ออกจากสิทธิ์ลุ้นรางวัลถาวร และเริ่มจับรางวัล "${luckyWinners[0].prizeName}" ใหม่ทันทีหรือไม่?`,
-                      `Permanently disqualify "${luckyWinners[0].winnerName}" (${luckyWinners[0].employeeId}) and immediately re-draw "${luckyWinners[0].prizeName}"?`
-                    )
-                  )
-                ) {
-                  handleConfirmForfeitAndRedraw(luckyWinners[0], true);
-                }
+                soundFX.playClick();
+                const latest = luckyWinners[0];
+                if (!latest) return;
+                showConfirmDialog({
+                  variant: 'danger',
+                  title: t('ยืนยันการตัดสิทธิ์ & จับรางวัลใหม่', 'Confirm Forfeit & Re-Draw'),
+                  message: t(
+                    `ยืนยันตัดสิทธิ์ "${latest.winnerName}" (${latest.employeeId}) ออกจากสิทธิ์ลุ้นรางวัลถาวร และเริ่มจับรางวัล "${latest.prizeName}" ใหม่ทันทีหรือไม่?`,
+                    `Permanently disqualify "${latest.winnerName}" (${latest.employeeId}) and immediately re-draw "${latest.prizeName}"?`
+                  ),
+                  confirmText: t('ตัดสิทธิ์ & จับใหม่ทันที', 'Forfeit & Re-Draw'),
+                  onConfirm: () => handleConfirmForfeitAndRedraw(latest, true),
+                });
               }}
               className="min-h-[42px] px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-400/50 font-extrabold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50"
             >
@@ -1348,6 +1432,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 className={`min-h-[46px] px-5 py-2.5 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer shadow-md ${
                   config.isVipTriggerActive
                     ? 'bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white'
+                    : config.isRegistrationOpen
+                    ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border-2 border-amber-400/60 shadow-none'
                     : 'bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white'
                 }`}
               >
@@ -1355,6 +1441,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <>
                     <Lock className="w-4 h-4" />
                     <span>{t('ล็อกปุ่มผู้บริหารชั่วคราว', 'Lock VIP Button')}</span>
+                  </>
+                ) : config.isRegistrationOpen ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>{t('เปิดสิทธิ์ให้ผู้บริหารกดรอบนี้', 'Unlock VIP Button for Round')}</span>
                   </>
                 ) : (
                   <>
@@ -1648,16 +1739,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        if (
-                          confirm(
-                            t(
-                              `คุณต้องการลบรางวัล "${prize.name}" หรือไม่?`,
-                              `Delete prize "${prize.name}"?`
-                            )
-                          )
-                        ) {
-                          handleDeletePrize(prize.id);
-                        }
+                        soundFX.playClick();
+                        showConfirmDialog({
+                          variant: 'danger',
+                          title: t('ยืนยันการลบของรางวัล', 'Confirm Delete Prize'),
+                          message: t(
+                            `คุณต้องการลบรางวัล "${prize.name}" ออกจากรายการหรือไม่?`,
+                            `Are you sure you want to delete prize "${prize.name}"?`
+                          ),
+                          confirmText: t('ลบรางวัล', 'Delete Prize'),
+                          onConfirm: () => handleDeletePrize(prize.id),
+                        });
                       }}
                       className="min-h-[40px] min-w-[40px] p-2 rounded-xl bg-white dark:bg-zinc-900 hover:bg-rose-500/15 dark:hover:bg-rose-500/20 text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-300 border border-zinc-200 dark:border-zinc-800 hover:border-rose-500/30 flex items-center justify-center transition cursor-pointer"
                       title={t('ลบรางวัล', 'Delete prize')}
@@ -2166,16 +2258,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    if (
-                      confirm(
-                        t(
-                          'คุณแน่ใจหรือไม่ว่าต้องการล้างประวัติการสุ่มรางวัลทั้งหมดและคืนสิทธิ์ให้ผู้เข้าร่วมงาน?',
-                          'Are you sure you want to reset all Lucky Draw history and restore prize stock?'
-                        )
-                      )
-                    ) {
-                      onResetAllLuckyDraws();
-                    }
+                    soundFX.playClick();
+                    showConfirmDialog({
+                      variant: 'danger',
+                      title: t('ยืนยันการรีเซ็ตประวัติรางวัล', 'Reset All Lucky Draws?'),
+                      message: t(
+                        'คุณแน่ใจหรือไม่ว่าต้องการล้างประวัติการสุ่มรางวัลทั้งหมดและคืนสิทธิ์ให้ผู้เข้าร่วมงานทุกคน?',
+                        'Are you sure you want to reset all Lucky Draw history and restore prize stock?'
+                      ),
+                      confirmText: t('รีเซ็ตทั้งหมด', 'Reset All'),
+                      onConfirm: () => onResetAllLuckyDraws(),
+                    });
                   }}
                   className="min-h-[44px] px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                 >
@@ -2224,16 +2317,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      if (
-                        confirm(
-                          t(
-                            `ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำรางวัลกลับเข้าสู่ระบบ)`,
-                            `Revoke "${w.winnerName}"'s prize and return it to pool?`
-                          )
-                        )
-                      ) {
-                        onDeleteLuckyWinner(w.id);
-                      }
+                      soundFX.playClick();
+                      showConfirmDialog({
+                        variant: 'danger',
+                        title: t('ยืนยันการยกเลิกผลรางวัล', 'Revoke Prize Result?'),
+                        message: t(
+                          `ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำของรางวัลกลับเข้าสู่ระบบ)`,
+                          `Revoke "${w.winnerName}"'s prize and return it to pool?`
+                        ),
+                        confirmText: t('ยกเลิกผลรางวัล', 'Revoke Prize'),
+                        onConfirm: () => onDeleteLuckyWinner(w.id),
+                      });
                     }}
                     className="min-h-[44px] min-w-[44px] p-2 rounded-xl text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/15 flex items-center justify-center transition cursor-pointer shrink-0"
                     title={t('สละสิทธิ์ / จับใหม่', 'Forfeit / Re-draw')}
@@ -2319,16 +2413,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              if (
-                                confirm(
-                                  t(
-                                    `ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำรางวัลกลับเข้าสู่ระบบ)`,
-                                    `Revoke "${w.winnerName}"'s prize and return it to pool?`
-                                  )
-                                )
-                              ) {
-                                onDeleteLuckyWinner(w.id);
-                              }
+                              soundFX.playClick();
+                              showConfirmDialog({
+                                variant: 'danger',
+                                title: t('ยืนยันการยกเลิกผลรางวัล', 'Revoke Prize Result?'),
+                                message: t(
+                                  `ต้องการยกเลิกผลรางวัลของ "${w.winnerName}" หรือไม่? (จะนำของรางวัลกลับเข้าสู่ระบบ)`,
+                                  `Revoke "${w.winnerName}"'s prize and return it to pool?`
+                                ),
+                                confirmText: t('ยกเลิกผลรางวัล', 'Revoke Prize'),
+                                onConfirm: () => onDeleteLuckyWinner(w.id),
+                              });
                             }}
                             className="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/15 transition cursor-pointer"
                             title={t('สละสิทธิ์ / จับใหม่', 'Forfeit / Re-draw')}
@@ -2864,16 +2959,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (
-                    confirm(
-                      t(
-                        `ต้องการตัดสิทธิ์ "${latestWinnerModal.winnerName}" ถาวร และเริ่มจับรางวัล "${latestWinnerModal.prizeName}" ใหม่ทันทีหรือไม่?`,
-                        `Permanently disqualify "${latestWinnerModal.winnerName}" and re-draw "${latestWinnerModal.prizeName}"?`
-                      )
-                    )
-                  ) {
-                    handleConfirmForfeitAndRedraw(latestWinnerModal, true);
-                  }
+                  soundFX.playClick();
+                  const target = latestWinnerModal;
+                  if (!target) return;
+                  showConfirmDialog({
+                    variant: 'danger',
+                    title: t('ยืนยันการตัดสิทธิ์ & จับรางวัลใหม่', 'Confirm Forfeit & Re-Draw'),
+                    message: t(
+                      `ต้องการตัดสิทธิ์ "${target.winnerName}" ถาวร และเริ่มจับรางวัล "${target.prizeName}" ใหม่ทันทีหรือไม่?`,
+                      `Permanently disqualify "${target.winnerName}" and re-draw "${target.prizeName}"?`
+                    ),
+                    confirmText: t('ตัดสิทธิ์ & จับใหม่ทันที', 'Forfeit & Re-Draw'),
+                    onConfirm: () => handleConfirmForfeitAndRedraw(target, true),
+                  });
                 }}
                 className="w-full min-h-[42px] py-2 px-4 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-400/50 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
               >
@@ -3002,6 +3100,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           'Enter 8-digit PIN to show fair-chance filtering & group blocks'
         )}
         icon={<ShieldAlert className="w-6 h-6" />}
+      />
+
+      {/* STYLED SYSTEM ALERT & CONFIRM DIALOG */}
+      <PartyDialogModal
+        dialog={dialog}
+        onClose={() => setDialog((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

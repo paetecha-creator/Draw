@@ -11,13 +11,23 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
-// Force HTTP long-polling so Firestore connects reliably inside sandboxed iframes and strict proxies
-// instead of failing with "Failed to get document because the client is offline".
+// Use forced long-polling inside sandboxed iframes, and auto-detect (WebChannel + fallback)
+// on standalone browsers/mobile phones for instant cross-device real-time sync.
+const isInIframe = (() => {
+  try {
+    return typeof window !== 'undefined' && window.self !== window.top;
+  } catch {
+    return true;
+  }
+})();
+
 let dbInstance: Firestore;
 try {
   dbInstance = initializeFirestore(
     app,
-    { experimentalForceLongPolling: true },
+    isInIframe
+      ? { experimentalForceLongPolling: true }
+      : { experimentalAutoDetectLongPolling: true },
     firebaseConfig.firestoreDatabaseId
   );
 } catch {

@@ -64,6 +64,7 @@ export default function App() {
   });
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const isVipDrawingRef = useRef(false);
+  const lastLocalConfigWriteAtRef = useRef(0);
 
   // Sync my personal pass when registrations update from Firestore
   useEffect(() => {
@@ -126,6 +127,80 @@ export default function App() {
     };
   }, []);
 
+  // Active server-sync safeguard for cross-device VIP Remote & LIVE screens
+  // (guarantees real-time updates even if mobile WebChannel/long-polling is paused or throttled)
+  useEffect(() => {
+    let isMounted = true;
+    const syncConfigNow = async () => {
+      if (Date.now() - lastLocalConfigWriteAtRef.current < 2500) return;
+      const serverCfg = await FirestoreService.refreshConfigFromServer();
+      if (!isMounted || !serverCfg) return;
+      if (Date.now() - lastLocalConfigWriteAtRef.current < 2500) return;
+      setConfig((prev) => {
+        if (
+          prev.isVipTriggerActive === serverCfg.isVipTriggerActive &&
+          prev.vipActivePrizeId === serverCfg.vipActivePrizeId &&
+          prev.isRegistrationOpen === serverCfg.isRegistrationOpen &&
+          prev.claimCountdownEndAt === serverCfg.claimCountdownEndAt &&
+          prev.claimCountdownWinnerId === serverCfg.claimCountdownWinnerId &&
+          prev.eventName === serverCfg.eventName &&
+          JSON.stringify(prev.blockedGroups) === JSON.stringify(serverCfg.blockedGroups)
+        ) {
+          return prev;
+        }
+        return serverCfg;
+      });
+    };
+
+    const syncCollectionsNow = async () => {
+      const fresh = await FirestoreService.refreshLiveCollectionsFromServer();
+      if (!isMounted) return;
+      if (fresh.prizes) setPrizes(fresh.prizes);
+      if (fresh.registrations) setRegistrations(fresh.registrations);
+      if (fresh.luckyWinners) setLuckyWinners(fresh.luckyWinners);
+    };
+
+    // Immediate sync on view switch & when returning to tab/phone screen
+    syncConfigNow();
+    if (currentView === 'vip' || currentView === 'livedraw') {
+      syncCollectionsNow();
+    }
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      syncConfigNow();
+      if (currentView === 'vip' || currentView === 'livedraw') {
+        syncCollectionsNow();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleVisibilityOrFocus);
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    }
+
+    const configPollMs = currentView === 'vip' || currentView === 'livedraw' ? 1500 : 5000;
+    const configTimer = setInterval(syncConfigNow, configPollMs);
+    const collectionsTimer =
+      currentView === 'vip' || currentView === 'livedraw'
+        ? setInterval(syncCollectionsNow, 4500)
+        : null;
+
+    return () => {
+      isMounted = false;
+      clearInterval(configTimer);
+      if (collectionsTimer) clearInterval(collectionsTimer);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleVisibilityOrFocus);
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      }
+    };
+  }, [currentView]);
+
   // Compute eligible candidates (strictly exclude ALL previous winners and any disqualified/blocked guests)
   const eligibleCandidates = useMemo(() => {
     const wonEmployeeIds = new Set(luckyWinners.map((w) => w.employeeId.trim().toUpperCase()));
@@ -180,6 +255,7 @@ export default function App() {
   };
 
   const handleUpdateConfig = async (newConfig: PartyConfig) => {
+    lastLocalConfigWriteAtRef.current = Date.now();
     setConfig(newConfig);
     try {
       await FirestoreService.setConfig(newConfig);
@@ -225,6 +301,7 @@ export default function App() {
         p.id === newWinner.prizeId ? { ...p, remaining: Math.max(0, p.remaining - 1) } : p
       )
     );
+    lastLocalConfigWriteAtRef.current = Date.now();
     setConfig((prev) => ({
       ...prev,
       isVipTriggerActive: false,
