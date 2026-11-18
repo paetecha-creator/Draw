@@ -26,7 +26,12 @@ export function compressImageDataUrl(
         return;
       }
       ctx.drawImage(img, 0, 0, width, height);
-      const compressed = canvas.toDataURL('image/jpeg', quality);
+      let q = quality;
+      let compressed = canvas.toDataURL('image/jpeg', q);
+      while (compressed.length > 380000 && q > 0.25) {
+        q = Math.max(0.25, q - 0.12);
+        compressed = canvas.toDataURL('image/jpeg', q);
+      }
       resolve(compressed);
     };
     img.onerror = () => resolve(sourceDataUrl);

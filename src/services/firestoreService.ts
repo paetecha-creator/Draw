@@ -187,15 +187,16 @@ function sanitizeRegistrationPayload(
   reg: AttendeeRegistration,
   docId: string
 ): Record<string, unknown> {
+  const empId = clip(reg.employeeId.toUpperCase(), 128) || clip(docId, 128) || 'EMP';
   return {
-    id: clip(docId, 128),
-    employeeId: clip(reg.employeeId.toUpperCase(), 128),
-    fullName: clip(reg.fullName, 200) || `พนักงาน ${clip(reg.employeeId, 60)}`,
+    id: clip(docId, 128) || 'REG_EMP',
+    employeeId: empId,
+    fullName: clip(reg.fullName, 200) || `พนักงาน ${empId}`,
     nickname: clip(reg.nickname, 100),
     department: clip(reg.department, 150) || 'พนักงานทั่วไป',
     tableNumber: clip(reg.tableNumber, 150) || 'โต๊ะกลาง',
-    phone: clip(reg.phone, 40),
-    selfieUrl: clip(reg.selfieUrl, 450000),
+    phone: clip(reg.phone, 40) || '-',
+    selfieUrl: clip(reg.selfieUrl, 450000) || 'photo-pending',
     registeredAt: clip(reg.registeredAt, 64) || new Date().toISOString(),
     dietaryOrNote: clip(reg.dietaryOrNote, 300),
     groupRole: clip(reg.groupRole, 100) || 'พนักงานทั่วไป',

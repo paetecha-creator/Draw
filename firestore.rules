@@ -228,7 +228,7 @@ service cloud.firestore {
     // Employee roster for table lookup & Excel sync
     match /roster/{employeeDocId} {
       allow get: if isValidId(employeeDocId);
-      allow list: if resource.data.id is string;
+      allow list: if request.query.limit == null || request.query.limit <= 5000;
       allow create, update: if isValidId(employeeDocId) && isValidRoster(incoming());
       allow delete: if isValidId(employeeDocId);
     }
@@ -236,7 +236,7 @@ service cloud.firestore {
     // Lucky Draw prizes
     match /prizes/{prizeId} {
       allow get: if isValidId(prizeId);
-      allow list: if resource.data.id is string;
+      allow list: if request.query.limit == null || request.query.limit <= 1000;
       allow create, update: if isValidId(prizeId) && isValidPrize(incoming());
       allow delete: if isValidId(prizeId);
     }
@@ -244,17 +244,17 @@ service cloud.firestore {
     // Checked-in attendees
     match /registrations/{registrationId} {
       allow get: if isValidId(registrationId);
-      allow list: if resource.data.employeeId is string;
+      allow list: if request.query.limit == null || request.query.limit <= 5000;
       allow create: if isValidId(registrationId) && isValidRegistration(incoming());
-      allow update: if isValidId(registrationId) && isValidRegistration(incoming()) && incoming().employeeId == existing().employeeId;
+      allow update: if isValidId(registrationId) && isValidRegistration(incoming()) && incoming().employeeId.lower() == existing().employeeId.lower();
       allow delete: if isValidId(registrationId);
     }
 
     // Live Lucky Draw winner records (no phone PII stored)
     match /luckyWinners/{winnerId} {
       allow get: if isValidId(winnerId);
-      allow list: if resource.data.round is int;
-      allow create: if isValidId(winnerId) && isValidLuckyWinner(incoming()) && exists(/databases/$(database)/documents/prizes/$(incoming().prizeId));
+      allow list: if request.query.limit == null || request.query.limit <= 5000;
+      allow create: if isValidId(winnerId) && isValidLuckyWinner(incoming()) && existsAfter(/databases/$(database)/documents/prizes/$(incoming().prizeId));
       allow delete: if isValidId(winnerId);
     }
   }
