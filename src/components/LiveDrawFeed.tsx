@@ -18,6 +18,8 @@ import {
   UserCheck,
   TrendingUp,
   CheckCircle2,
+  Minimize2,
+  Maximize2,
 } from 'lucide-react';
 import { AttendeeRegistration, LuckyDrawRecord, PartyConfig, Prize } from '../types/party';
 import { soundFX } from '../utils/audio';
@@ -65,9 +67,15 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
 
   // 60-Second Claim Countdown State
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
+  const [isCountdownMinimized, setIsCountdownMinimized] = useState(false);
   const lastTickSecRef = useRef<number | null>(null);
 
   const latestWinner = winners.length > 0 ? winners[0] : null;
+  const latestWinnerPrize = latestWinner
+    ? prizes.find((p) => p.id === latestWinner.prizeId)
+    : undefined;
+  const latestWinnerPrizeImage =
+    latestWinner?.prizeImageUrl || latestWinnerPrize?.imageUrl || '';
   const armedPrize =
     prizes.find((p) => p.id === config.vipActivePrizeId) ||
     prizes.find((p) => p.remaining > 0) ||
@@ -261,6 +269,7 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
 
   // Real-time 60-second claim countdown synced from Admin via PartyConfig
   useEffect(() => {
+    setIsCountdownMinimized(false);
     const endAtStr = config.claimCountdownEndAt?.trim();
     if (!endAtStr) {
       setCountdownSeconds(null);
@@ -315,6 +324,176 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
 
   return (
     <div className="w-full max-w-3xl mx-auto pb-12">
+      {/* =========================================================================
+          FULL-SCREEN GIANT COUNTDOWN OVERLAY (Synced when Admin starts countdown)
+      ========================================================================= */}
+      {countdownSeconds !== null && !isAnimatingDraw && !isCountdownMinimized && (
+        <div
+          className={`fixed inset-0 z-50 flex flex-col justify-between p-4 sm:p-8 transition-colors duration-300 overflow-y-auto ${
+            countdownSeconds === 0
+              ? 'bg-gradient-to-br from-[#2b050f] via-[#450a18] to-[#1a0308]'
+              : isCountdownUrgent
+              ? 'bg-gradient-to-br from-[#260618] via-[#3a081e] to-[#160412]'
+              : isCountdownWarning
+              ? 'bg-gradient-to-br from-[#241305] via-[#331a06] to-[#170b04]'
+              : 'bg-gradient-to-br from-[#070217] via-[#120633] to-[#051a2e]'
+          } text-white`}
+        >
+          {/* Ambient Animated Radial Glows */}
+          <div className="fixed inset-0 pointer-events-none overflow-hidden">
+            <div
+              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] sm:w-[760px] sm:h-[760px] rounded-full blur-3xl opacity-35 ${
+                countdownSeconds === 0 || isCountdownUrgent
+                  ? 'bg-rose-500 animate-pulse'
+                  : isCountdownWarning
+                  ? 'bg-amber-500 animate-pulse'
+                  : 'bg-cyan-500'
+              }`}
+            />
+          </div>
+
+          {/* Top Bar */}
+          <div className="relative z-10 w-full max-w-5xl mx-auto flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-black tracking-widest uppercase text-amber-300">
+                <Timer
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                    countdownSeconds === 0 || isCountdownUrgent ? 'text-rose-400 animate-spin' : 'text-cyan-300 animate-pulse'
+                  }`}
+                />
+                <span>
+                  {countdownSeconds === 0
+                    ? t('หมดเวลารับรางวัลแล้ว!', "TIME'S UP — CLAIM EXPIRED")
+                    : isCountdownUrgent
+                    ? t('นาทีสุดท้าย! กรุณาแสดงตัวบนเวทีด่วน', 'FINAL SECONDS! COME TO STAGE NOW')
+                    : t('นับถอยหลังแสดงตัวรับรางวัลบนเวที', 'STAGE CLAIM COUNTDOWN')}
+                </span>
+              </div>
+              {latestWinner && (
+                <div className="text-sm sm:text-xl font-extrabold text-white/95 truncate mt-0.5">
+                  {latestWinner.prizeName}
+                  {latestWinner.prizeTier ? ` · ${latestWinner.prizeTier}` : ''}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                soundFX.playClick();
+                setIsCountdownMinimized(true);
+              }}
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+              title={t('ย่อหน้าต่างชั่วคราว', 'Minimize overlay')}
+            >
+              <Minimize2 className="w-4 h-4" />
+              <span className="hidden sm:inline">{t('ย่อจอ', 'Minimize')}</span>
+            </button>
+          </div>
+
+          {/* Centerpiece GIANT Countdown Number */}
+          <div className="relative z-10 flex-1 flex flex-col items-center justify-center my-4 select-none text-center">
+            <div
+              className={`font-black font-mono tabular-nums leading-none tracking-tighter transition-transform duration-150 ${
+                countdownSeconds === 0
+                  ? 'text-[8rem] sm:text-[13rem] md:text-[16rem] text-rose-400 drop-shadow-[0_0_55px_rgba(244,63,94,0.85)] animate-pulse'
+                  : isCountdownUrgent
+                  ? 'text-[10rem] sm:text-[15rem] md:text-[19rem] lg:text-[22rem] text-rose-400 drop-shadow-[0_0_65px_rgba(244,63,94,0.9)] scale-105'
+                  : isCountdownWarning
+                  ? 'text-[10rem] sm:text-[15rem] md:text-[19rem] lg:text-[22rem] text-amber-300 drop-shadow-[0_0_55px_rgba(251,191,36,0.75)]'
+                  : 'text-[10rem] sm:text-[15rem] md:text-[19rem] lg:text-[22rem] bg-gradient-to-b from-white via-cyan-200 to-emerald-300 bg-clip-text text-transparent drop-shadow-[0_0_55px_rgba(34,211,238,0.65)]'
+              }`}
+            >
+              {countdownSeconds}
+            </div>
+
+            <div className="mt-2 sm:mt-4 text-sm sm:text-xl font-black tracking-[0.25em] uppercase text-white/85">
+              {countdownSeconds === 0
+                ? t('หมดเวลา 60 วินาที!', '60 SECONDS EXPIRED!')
+                : t('วินาทีที่เหลือ / SECONDS LEFT', 'SECONDS REMAINING')}
+            </div>
+
+            {/* Wide Fullscreen Progress Bar */}
+            <div className="mt-5 w-full max-w-2xl h-3.5 sm:h-4 rounded-full bg-white/15 overflow-hidden p-0.5 border border-white/15">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  countdownSeconds === 0 || isCountdownUrgent
+                    ? 'bg-gradient-to-r from-rose-500 to-red-400'
+                    : isCountdownWarning
+                    ? 'bg-gradient-to-r from-amber-400 to-orange-500'
+                    : 'bg-gradient-to-r from-emerald-400 via-cyan-400 to-fuchsia-400'
+                }`}
+                style={{ width: `${Math.round(countdownProgress * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Bottom Winner & Prize Paired Strip */}
+          {latestWinner && (
+            <div className="relative z-10 w-full max-w-3xl mx-auto rounded-2xl sm:rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 p-3.5 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xl">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                {/* Winner Photo */}
+                <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl overflow-hidden border-2 border-cyan-300 bg-zinc-900 shrink-0 shadow-lg">
+                  {latestWinner.selfieUrl ? (
+                    <img
+                      src={latestWinner.selfieUrl}
+                      alt={latestWinner.winnerName}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-white/60">
+                      {t('ผู้โชคดี', 'Winner')}
+                    </div>
+                  )}
+                </div>
+
+                {/* Paired Prize Photo */}
+                {latestWinnerPrizeImage && !brokenImages[`fs_${latestWinner.prizeId}`] ? (
+                  <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl overflow-hidden border-2 border-amber-300 bg-zinc-900 shrink-0 shadow-lg">
+                    <img
+                      src={latestWinnerPrizeImage}
+                      alt={latestWinner.prizeName}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                      onError={() =>
+                        setBrokenImages((prev) => ({
+                          ...prev,
+                          [`fs_${latestWinner.prizeId}`]: true,
+                        }))
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-xl border-2 border-amber-300/70 bg-gradient-to-br from-fuchsia-600/40 to-amber-500/40 flex items-center justify-center shrink-0">
+                    <Gift className="w-7 h-7 text-amber-300" />
+                  </div>
+                )}
+
+                <div className="min-w-0 text-left">
+                  <div className="text-xs font-mono font-extrabold text-amber-300">
+                    {latestWinner.employeeId}
+                  </div>
+                  <div className="text-lg sm:text-2xl font-black text-white truncate">
+                    {latestWinner.winnerName}
+                    {latestWinner.nickname ? ` (${latestWinner.nickname})` : ''}
+                  </div>
+                  <div className="text-xs sm:text-sm text-cyan-200 font-semibold truncate">
+                    {latestWinner.department} · {latestWinner.tableNumber}
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-fuchsia-500 via-rose-500 to-amber-400 text-white text-xs sm:text-sm font-black shrink-0 shadow-lg">
+                {countdownSeconds === 0
+                  ? t('กรุณาติดต่อทีมงาน', 'Please See Organizer')
+                  : t('ขอเชิญขึ้นเวทีรับรางวัล!', 'Come to the Stage!')}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
         <div className="min-w-0">
@@ -514,30 +693,76 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-6 bg-gradient-to-br from-fuchsia-50 via-amber-50/70 to-cyan-50 dark:from-violet-950/80 dark:via-[#1b0c38] dark:to-cyan-950/60 border border-fuchsia-300/60 dark:border-fuchsia-500/35 rounded-2xl p-5">
-              <div className="relative shrink-0">
-                <div className="w-34 h-42 sm:w-38 sm:h-46 rounded-2xl p-1 bg-gradient-to-tr from-fuchsia-500 via-amber-400 to-cyan-400 shadow-xl">
-                  <div className="w-full h-full rounded-xl overflow-hidden bg-zinc-200 dark:bg-zinc-900">
-                    {latestWinner.selfieUrl ? (
-                      <img
-                        src={latestWinner.selfieUrl}
-                        alt={latestWinner.winnerName}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">
-                        {t('ไม่มีรูปภาพ', 'No Photo')}
+            <div className="flex flex-col md:flex-row items-center gap-6 bg-gradient-to-br from-fuchsia-50 via-amber-50/70 to-cyan-50 dark:from-violet-950/80 dark:via-[#1b0c38] dark:to-cyan-950/60 border border-fuchsia-300/60 dark:border-fuchsia-500/35 rounded-2xl p-5">
+              {/* Paired Showcase: Winner Photo + Prize Image Side-by-Side */}
+              <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                {/* 1. Winner Photo */}
+                <div className="relative">
+                  <div className="w-32 h-40 sm:w-36 sm:h-44 rounded-2xl p-1 bg-gradient-to-tr from-fuchsia-500 via-amber-400 to-cyan-400 shadow-xl">
+                    <div className="w-full h-full rounded-xl overflow-hidden bg-zinc-200 dark:bg-zinc-900 relative">
+                      {latestWinner.selfieUrl ? (
+                        <img
+                          src={latestWinner.selfieUrl}
+                          alt={latestWinner.winnerName}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-zinc-500">
+                          {t('ไม่มีรูปภาพ', 'No Photo')}
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent py-1.5 px-2 text-center">
+                        <span className="text-[10px] font-extrabold text-white tracking-wide">
+                          {t('ผู้โชคดี', 'Winner')}
+                        </span>
                       </div>
-                    )}
+                    </div>
+                  </div>
+                  <div className="absolute -top-2.5 -left-2.5 bg-gradient-to-tr from-fuchsia-500 to-rose-500 text-white p-1.5 rounded-xl shadow-lg">
+                    <Trophy className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="absolute -top-2.5 -right-2.5 bg-gradient-to-tr from-amber-400 to-orange-500 text-white p-2 rounded-xl shadow-lg">
-                  <Trophy className="w-4 h-4" />
+
+                {/* 2. Prize Photo */}
+                <div className="relative">
+                  <div className="w-32 h-40 sm:w-36 sm:h-44 rounded-2xl p-1 bg-gradient-to-tr from-amber-400 via-orange-500 to-fuchsia-500 shadow-xl">
+                    <div className="w-full h-full rounded-xl overflow-hidden bg-white dark:bg-zinc-900 relative flex items-center justify-center">
+                      {latestWinnerPrizeImage && !brokenImages[`winner_${latestWinner.prizeId}`] ? (
+                        <img
+                          src={latestWinnerPrizeImage}
+                          alt={latestWinner.prizeName}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={() =>
+                            setBrokenImages((prev) => ({
+                              ...prev,
+                              [`winner_${latestWinner.prizeId}`]: true,
+                            }))
+                          }
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-amber-100 via-fuchsia-50 to-cyan-100 dark:from-violet-950 dark:to-zinc-900 p-3 text-center">
+                          <Gift className="w-10 h-10 text-fuchsia-500 dark:text-amber-400 mb-1" />
+                          <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200 line-clamp-2">
+                            {latestWinner.prizeName}
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent py-1.5 px-2 text-center">
+                        <span className="text-[10px] font-extrabold text-amber-300 tracking-wide">
+                          {t('ของรางวัล', 'Prize')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="absolute -top-2.5 -right-2.5 bg-gradient-to-tr from-amber-400 to-orange-500 text-white p-1.5 rounded-xl shadow-lg">
+                    <Gift className="w-4 h-4" />
+                  </div>
                 </div>
               </div>
 
-              <div className="text-center sm:text-left flex-1 min-w-0">
+              <div className="text-center md:text-left flex-1 min-w-0">
                 <div className="text-xs font-mono text-fuchsia-600 dark:text-amber-300 font-extrabold mb-1">
                   {latestWinner.employeeId}
                 </div>
@@ -681,6 +906,22 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
                         style={{ width: `${Math.round(countdownProgress * 100)}%` }}
                       />
                     </div>
+
+                    {isCountdownMinimized && (
+                      <div className="mt-3 flex justify-center sm:justify-start">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundFX.playClick();
+                            setIsCountdownMinimized(false);
+                          }}
+                          className="min-h-[36px] px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-white/15 hover:bg-slate-800 dark:hover:bg-white/25 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>{t('ขยายเลขนับถอยหลังเต็มจอ', 'Expand Fullscreen Countdown')}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1008,24 +1249,44 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
 
         {winners.length > 0 ? (
           <div className="space-y-2.5">
-            {winners.map((rec, index) => (
+            {winners.map((rec, index) => {
+              const recPrizeImg =
+                rec.prizeImageUrl || prizes.find((p) => p.id === rec.prizeId)?.imageUrl || '';
+              return (
               <div
                 key={rec.id}
                 className="p-3.5 rounded-2xl bg-white/95 dark:bg-[#140a2b]/95 border border-fuchsia-300/50 dark:border-violet-700 hover:border-cyan-400 flex items-center gap-3.5 transition shadow-sm"
               >
-                <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 shrink-0 border-2 border-amber-400">
-                  {rec.selfieUrl ? (
-                    <img
-                      src={rec.selfieUrl}
-                      alt={rec.winnerName}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] text-fuchsia-600 dark:text-amber-400 font-mono font-bold">
-                      #{winners.length - index}
-                    </div>
-                  )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 shrink-0 border-2 border-fuchsia-400">
+                    {rec.selfieUrl ? (
+                      <img
+                        src={rec.selfieUrl}
+                        alt={rec.winnerName}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[10px] text-fuchsia-600 dark:text-amber-400 font-mono font-bold">
+                        #{winners.length - index}
+                      </div>
+                    )}
+                  </div>
+                  <div className="w-12 h-14 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-950 shrink-0 border-2 border-amber-400 flex items-center justify-center">
+                    {recPrizeImg && !brokenImages[`hist_${rec.id}`] ? (
+                      <img
+                        src={recPrizeImg}
+                        alt={rec.prizeName}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={() =>
+                          setBrokenImages((prev) => ({ ...prev, [`hist_${rec.id}`]: true }))
+                        }
+                      />
+                    ) : (
+                      <Gift className="w-5 h-5 text-amber-500 dark:text-amber-300" />
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -1060,7 +1321,8 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
                   </span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="p-6 rounded-2xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-dashed border-fuchsia-300 dark:border-violet-700 text-center text-xs text-zinc-600 dark:text-zinc-300">

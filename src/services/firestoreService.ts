@@ -980,6 +980,8 @@ export const FirestoreService = {
 
     const nextConfig: PartyConfig = {
       ...currentConfig,
+      isRegistrationOpen: false,
+      isVipTriggerActive: true,
       vipActivePrizeId: prizeId,
       claimCountdownEndAt: '',
       claimCountdownWinnerId: '',

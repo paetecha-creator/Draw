@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { Image as ImageIcon, CheckCircle2, Lock, Sparkles, User, Phone, AlertCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { CheckCircle2, Lock, Sparkles, User, Phone, AlertCircle, ShieldCheck } from 'lucide-react';
 import { AttendeeRegistration, EmployeeRoster, PartyConfig } from '../types/party';
 import { CameraCapture } from './CameraCapture';
+import { PartyDialogModal, PartyDialogState } from './PartyDialogModal';
 import { soundFX } from '../utils/audio';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 interface RegistrationFormProps {
   roster: EmployeeRoster[];
+  registrations: AttendeeRegistration[];
   config: PartyConfig;
   onRegisterSuccess: (registration: AttendeeRegistration) => Promise<void> | void;
   onViewLiveDraw: () => void;
@@ -14,6 +16,7 @@ interface RegistrationFormProps {
 
 export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   roster,
+  registrations,
   config,
   onRegisterSuccess,
   onViewLiveDraw,
@@ -25,6 +28,19 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [matchedEmployee, setMatchedEmployee] = useState<EmployeeRoster | null>(null);
+  const [dialog, setDialog] = useState<PartyDialogState>({
+    isOpen: false,
+    mode: 'alert',
+    variant: 'warning',
+    title: '',
+    message: '',
+  });
+
+  const duplicateRegistration = useMemo(() => {
+    const trimmed = employeeId.trim().toUpperCase();
+    if (!trimmed) return null;
+    return registrations.find((r) => r.employeeId.trim().toUpperCase() === trimmed) || null;
+  }, [employeeId, registrations]);
 
   if (!config.isRegistrationOpen) {
     return (
@@ -84,6 +100,26 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
       return;
     }
 
+    const existingReg = registrations.find(
+      (r) => r.employeeId.trim().toUpperCase() === trimmedId
+    );
+    if (existingReg) {
+      soundFX.playClick();
+      const dupMsg = t(
+        `รหัสพนักงาน ${trimmedId} (${existingReg.fullName}) ได้ลงทะเบียนเข้างานไปแล้ว — จำกัดสิทธิ์ลงทะเบียนได้เพียง 1 ครั้งต่อ 1 รหัสพนักงานเท่านั้น`,
+        `Employee ID ${trimmedId} (${existingReg.fullName}) has already checked in. Registration is strictly limited to 1 time per Employee ID.`
+      );
+      setFormError(dupMsg);
+      setDialog({
+        isOpen: true,
+        mode: 'alert',
+        variant: 'warning',
+        title: t('ไม่สามารถลงทะเบียนซ้ำได้', 'Duplicate Check-in Detected'),
+        message: dupMsg,
+      });
+      return;
+    }
+
     if (!trimmedPhone) {
       setFormError(t('กรุณากรอกเบอร์โทรศัพท์', 'Please enter your Phone Number'));
       return;
@@ -120,13 +156,27 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     try {
       setIsSubmitting(true);
       await onRegisterSuccess(newRegistration);
-    } catch {
-      setFormError(
-        t(
-          'บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
-          'Failed to save registration. Please try again.'
-        )
-      );
+    } catch (err) {
+      const isDup = err instanceof Error && err.message === 'DUPLICATE_REGISTRATION';
+      const errMsg = isDup
+        ? t(
+            `รหัสพนักงาน ${trimmedId} ได้ลงทะเบียนเข้างานไปแล้ว จำกัดสิทธิ์ลงทะเบียนได้เพียง 1 ครั้งต่อ 1 รหัสพนักงาน`,
+            `Employee ID ${trimmedId} is already registered. Only 1 check-in per Employee ID is allowed.`
+          )
+        : t(
+            'บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+            'Failed to save registration. Please try again.'
+          );
+      setFormError(errMsg);
+      if (isDup) {
+        setDialog({
+          isOpen: true,
+          mode: 'alert',
+          variant: 'warning',
+          title: t('ไม่สามารถลงทะเบียนซ้ำได้', 'Duplicate Check-in Detected'),
+          message: errMsg,
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -143,11 +193,6 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-balance bg-gradient-to-r from-violet-700 via-fuchsia-600 to-orange-500 dark:from-amber-300 dark:via-fuchsia-400 dark:to-cyan-300 bg-clip-text text-transparent">
           {config.eventName}
         </h2>
-        <p className="text-xs sm:text-sm text-zinc-700 dark:text-zinc-300 mt-1.5 max-w-lg mx-auto font-medium">
-          {lang === 'en'
-            ? 'Enter your Employee ID, Phone Number, and upload your photo from device.'
-            : 'กรอกรหัสพนักงาน เบอร์โทรศัพท์ และอัปโหลดรูปภาพจากเครื่องเพื่อใช้แสดงผลรางวัล'}
-        </p>
       </div>
 
       {/* Main Registration Container with Vivid Rainbow Top Accent */}
@@ -165,7 +210,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8 items-start pt-1">
-          {/* Left Column: Employee ID & Phone Number ONLY */}
+          {/* Left Column: Employee ID, Phone Number & Prize Claim Conditions */}
           <div className="space-y-4 sm:space-y-5">
             <div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-white mb-1">
@@ -173,8 +218,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
               </h3>
               <p className="text-xs text-zinc-600 dark:text-zinc-300">
                 {t(
-                  'กรอกเพียงรหัสพนักงานและเบอร์โทรศัพท์ ระบบจะดึงข้อมูลโต๊ะและรายชื่อให้อัตโนมัติ',
-                  'Enter only your Employee ID and Phone Number. Your table and details will be matched automatically.'
+                  'กรอกเพียงรหัสพนักงานและเบอร์โทรศัพท์ ระบบจะดึงข้อมูลโต๊ะและรายชื่อให้อัตโนมัติ (ลงทะเบียนได้ 1 ครั้งต่อ 1 รหัสพนักงาน)',
+                  'Enter only your Employee ID and Phone Number. Limited to 1 check-in per Employee ID.'
                 )}
               </p>
             </div>
@@ -200,9 +245,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                   value={employeeId}
                   onChange={(e) => handleEmployeeIdChange(e.target.value)}
                   placeholder={t('เช่น 7473 หรือ ST20339', 'e.g. 7473 or ST20339')}
-                  className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-fuchsia-50/50 dark:bg-zinc-950/80 border-2 border-fuchsia-200 dark:border-violet-700 focus:border-fuchsia-500 dark:focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/25 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 text-base sm:text-sm font-mono uppercase font-bold tracking-wider transition"
+                  className={`w-full min-h-[48px] px-4 py-3 rounded-xl bg-fuchsia-50/50 dark:bg-zinc-950/80 border-2 focus:outline-none focus:ring-2 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 text-base sm:text-sm font-mono uppercase font-bold tracking-wider transition ${
+                    duplicateRegistration
+                      ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-400/25'
+                      : 'border-fuchsia-200 dark:border-violet-700 focus:border-fuchsia-500 dark:focus:border-cyan-400 focus:ring-fuchsia-400/25'
+                  }`}
                 />
-                {matchedEmployee && (
+                {matchedEmployee && !duplicateRegistration && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
                     <CheckCircle2 className="w-4 h-4" />
                     <span className="hidden sm:inline">{t('พบในรายชื่อ', 'Matched')}</span>
@@ -210,7 +259,24 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                 )}
               </div>
 
-              {matchedEmployee && (
+              {duplicateRegistration && (
+                <div className="mt-2.5 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/50 flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-200">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="font-extrabold">
+                      {t('รหัสพนักงานนี้ลงทะเบียนแล้ว (ห้ามลงทะเบียนซ้ำ)', 'Already Registered (Duplicate Not Allowed)')}
+                    </div>
+                    <div className="text-[11px] mt-0.5 opacity-90">
+                      {t(
+                        `${duplicateRegistration.fullName} · ${duplicateRegistration.tableNumber} — จำกัด 1 รหัสพนักงานลงทะเบียนได้ 1 ครั้ง`,
+                        `${duplicateRegistration.fullName} · ${duplicateRegistration.tableNumber} — 1 check-in per Employee ID`
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {matchedEmployee && !duplicateRegistration && (
                 <div className="mt-2.5 p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/15 via-cyan-500/15 to-teal-500/15 border border-emerald-400/50 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-zinc-900 dark:text-white truncate">
@@ -259,8 +325,30 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
               />
             </div>
 
+            {/* Prize Claim Conditions Box */}
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50/70 to-rose-50/60 dark:from-amber-500/10 dark:via-orange-500/10 dark:to-rose-500/10 border-2 border-amber-300/80 dark:border-amber-400/40">
+              <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-800 dark:text-amber-300 mb-1.5">
+                <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>{t('เงื่อนไขการรับรางวัล', 'Prize Claim Conditions')}</span>
+              </div>
+              <ol className="space-y-1 text-[11px] sm:text-xs text-zinc-700 dark:text-zinc-200 leading-relaxed font-medium">
+                <li>
+                  {t(
+                    '1.ต้องแสดงบัตรพนักงานในการรับรางวัล',
+                    '1. Winners must present their Employee ID card to claim any prize.'
+                  )}
+                </li>
+                <li>
+                  {t(
+                    '2.ขอสงวนสิทธิในการจับรางวัลใหม่ กรณีที่ไม่มีผู้โชคดีขึ้นมารับรางวัลบนเวที ตามเวลาที่กำหนด',
+                    '2. We reserve the right to conduct a re-draw if a winner does not come on stage to claim their prize within the allotted time.'
+                  )}
+                </li>
+              </ol>
+            </div>
+
             {/* Desktop Submit CTA */}
-            <div className="hidden md:block pt-2">
+            <div className="hidden md:block pt-1">
               <button
                 type="submit"
                 disabled={isSubmitting}
@@ -282,22 +370,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Device Image Upload (Replaces Camera Capture) */}
-          <div id="photo-upload-section" className="pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-fuchsia-200 dark:border-violet-800 md:pl-8">
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                <ImageIcon className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                <span>{t('อัปโหลดรูปภาพของคุณจากเครื่อง', 'Upload Your Photo')}</span>
-                <span className="text-rose-500 dark:text-rose-400">*</span>
-              </label>
-              {uploadedPhoto && (
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{t('พร้อมใช้งาน', 'Ready')}</span>
-                </span>
-              )}
-            </div>
-
+          {/* Right Column: Device Image Upload */}
+          <div id="photo-upload-section" className="pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-fuchsia-200 dark:border-violet-800 md:pl-8 flex flex-col items-center justify-center md:self-stretch">
             <CameraCapture
               currentPhoto={uploadedPhoto}
               onCapture={(photoUrl) => {
@@ -331,6 +405,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           </p>
         </div>
       </form>
+
+      <PartyDialogModal
+        dialog={dialog}
+        onClose={() => setDialog((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

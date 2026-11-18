@@ -223,13 +223,17 @@ export default function App() {
   // Handlers writing directly to Firestore with instant optimistic local state updates
   const handleRegisterSuccess = (newReg: AttendeeRegistration) => {
     const empIdUpper = newReg.employeeId.trim().toUpperCase();
-    const docId = toSafeDocId('REG_', empIdUpper);
-    const existingReg = registrations.find(
-      (r) => r.employeeId.trim().toUpperCase() === empIdUpper || r.id === docId
+    const alreadyRegistered = registrations.some(
+      (r) => r.employeeId.trim().toUpperCase() === empIdUpper
     );
+    if (alreadyRegistered) {
+      throw new Error('DUPLICATE_REGISTRATION');
+    }
+
+    const docId = toSafeDocId('REG_', empIdUpper);
     const existingRoster = roster.find((r) => r.id.trim().toUpperCase() === empIdUpper);
     const preserveBlocked = Boolean(
-      newReg.isBlockedFromDraw || existingReg?.isBlockedFromDraw || existingRoster?.isBlockedFromDraw
+      newReg.isBlockedFromDraw || existingRoster?.isBlockedFromDraw
     );
 
     const saved: AttendeeRegistration = {
@@ -362,16 +366,20 @@ export default function App() {
         emp.id.trim().toUpperCase() === empUpper ? { ...emp, isBlockedFromDraw: true } : emp
       )
     );
-    setConfig((prev) => ({
-      ...prev,
+    lastLocalConfigWriteAtRef.current = Date.now();
+    const nextConfig: PartyConfig = {
+      ...config,
+      isRegistrationOpen: false,
+      isVipTriggerActive: true,
       vipActivePrizeId: prizeId,
       claimCountdownEndAt: '',
       claimCountdownWinnerId: '',
       claimCountdownPrizeId: '',
-    }));
+    };
+    setConfig(nextConfig);
 
     try {
-      await FirestoreService.forfeitWinnerAndBlock(record, roster, registrations, config);
+      await FirestoreService.forfeitWinnerAndBlock(record, roster, registrations, nextConfig);
     } catch (err) {
       console.warn('Forfeit & block sync warning:', err);
     }
@@ -572,6 +580,7 @@ export default function App() {
             {currentView === 'register' && (
               <RegistrationForm
                 roster={roster}
+                registrations={registrations}
                 config={config}
                 onRegisterSuccess={handleRegisterSuccess}
                 onViewLiveDraw={() => setCurrentView('livedraw')}

@@ -787,8 +787,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleConfirmForfeitAndRedraw = async (
-    winnerRecord: LuckyDrawRecord,
-    autoStartDraw = true
+    winnerRecord: LuckyDrawRecord
   ) => {
     soundFX.playClick();
     setExpiredWinnerPrompt(null);
@@ -800,6 +799,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       await onForfeitAndBlockWinner(winnerRecord);
     } else {
       onDeleteLuckyWinner(winnerRecord.id);
+      onUpdateConfig({
+        ...config,
+        isRegistrationOpen: false,
+        isVipTriggerActive: true,
+        vipActivePrizeId: winnerRecord.prizeId,
+        claimCountdownEndAt: '',
+        claimCountdownWinnerId: '',
+        claimCountdownPrizeId: '',
+      });
     }
 
     const forfeitedEmpUpper = winnerRecord.employeeId.trim().toUpperCase();
@@ -810,29 +818,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setSelectedPrizeId(targetPrize.id);
     }
 
-    if (autoStartDraw && targetPrize) {
-      // Build immediate fresh candidate list excluding the permanently disqualified no-show and other winners
-      const nextEligible = eligibleCandidates.filter(
-        (att) => att.employeeId.trim().toUpperCase() !== forfeitedEmpUpper
-      );
-      if (nextEligible.length === 0) {
-        showAlertDialog({
-          variant: 'warning',
-          title: t('ไม่มีผู้มีสิทธิ์คงเหลือสำหรับจับใหม่', 'No Eligible Candidates Left'),
-          message: t(
-            'ตัดสิทธิ์ผู้ไม่มารับรางวัลแล้ว แต่ไม่มีผู้มีสิทธิ์ลุ้นรางวัลคงเหลือสำหรับจับใหม่',
-            'Winner disqualified & prize returned, but no eligible candidates remain for re-draw.'
-          ),
-        });
-        return;
-      }
-      setTimeout(() => {
-        executeDraw(targetPrize, {
-          overrideCandidates: nextEligible,
-          ignoreStockCheck: true,
-        });
-      }, 150);
+    const nextEligibleCount = eligibleCandidates.filter(
+      (att) => att.employeeId.trim().toUpperCase() !== forfeitedEmpUpper
+    ).length;
+
+    if (nextEligibleCount === 0) {
+      showAlertDialog({
+        variant: 'warning',
+        title: t('ไม่มีผู้มีสิทธิ์คงเหลือสำหรับจับใหม่', 'No Eligible Candidates Left'),
+        message: t(
+          'ตัดสิทธิ์ผู้ไม่มารับรางวัลแล้ว แต่ไม่มีผู้มีสิทธิ์ลุ้นรางวัลคงเหลือสำหรับจับใหม่',
+          'Winner disqualified & prize returned, but no eligible candidates remain for re-draw.'
+        ),
+      });
+      return;
     }
+
+    soundFX.playCelebrationChime();
+    showAlertDialog({
+      variant: 'success',
+      title: t('เปิดสิทธิ์ผู้บริหารสำหรับจับรางวัลใหม่แล้ว', 'VIP Button Unlocked for Re-Draw'),
+      message: t(
+        `ตัดสิทธิ์ "${winnerRecord.winnerName}" (${winnerRecord.employeeId}) และคืนสิทธิ์รางวัล "${targetPrize?.name || winnerRecord.prizeName}" เรียบร้อยแล้ว\n\nระบบได้เปิดสิทธิ์ปุ่ม LUCKY DRAW บนหน้าจอผู้บริหารแล้ว กรุณาให้ผู้บริหารกดปุ่มจับรางวัลใหม่ได้เลย`,
+        `"${winnerRecord.winnerName}" (${winnerRecord.employeeId}) has been disqualified and "${targetPrize?.name || winnerRecord.prizeName}" stock restored.\n\nThe Executive VIP LUCKY DRAW button is now unlocked for the replacement draw.`
+      ),
+    });
   };
 
   const handleStartLuckyDraw = () => {
@@ -1235,19 +1245,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 if (!latest) return;
                 showConfirmDialog({
                   variant: 'danger',
-                  title: t('ยืนยันการตัดสิทธิ์ & จับรางวัลใหม่', 'Confirm Forfeit & Re-Draw'),
+                  title: t('ยืนยันการตัดสิทธิ์ & เปิดสิทธิ์ผู้บริหารจับใหม่', 'Confirm Forfeit & Unlock VIP Re-Draw'),
                   message: t(
-                    `ยืนยันตัดสิทธิ์ "${latest.winnerName}" (${latest.employeeId}) ออกจากสิทธิ์ลุ้นรางวัลถาวร และเริ่มจับรางวัล "${latest.prizeName}" ใหม่ทันทีหรือไม่?`,
-                    `Permanently disqualify "${latest.winnerName}" (${latest.employeeId}) and immediately re-draw "${latest.prizeName}"?`
+                    `ยืนยันตัดสิทธิ์ "${latest.winnerName}" (${latest.employeeId}) ออกจากสิทธิ์ลุ้นรางวัลถาวร คืนรางวัล "${latest.prizeName}" และเปิดสิทธิ์ให้ผู้บริหารกดปุ่มจับรางวัลใหม่เองหรือไม่?`,
+                    `Permanently disqualify "${latest.winnerName}" (${latest.employeeId}), restore "${latest.prizeName}", and unlock the VIP Executive button for re-draw?`
                   ),
-                  confirmText: t('ตัดสิทธิ์ & จับใหม่ทันที', 'Forfeit & Re-Draw'),
-                  onConfirm: () => handleConfirmForfeitAndRedraw(latest, true),
+                  confirmText: t('ตัดสิทธิ์ & เปิดสิทธิ์ผู้บริหาร', 'Forfeit & Unlock VIP'),
+                  onConfirm: () => handleConfirmForfeitAndRedraw(latest),
                 });
               }}
               className="min-h-[42px] px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-400/50 font-extrabold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50"
             >
               <RotateCw className="w-3.5 h-3.5" />
-              <span>{t('สละสิทธิ์ & จับรางวัลเดิมใหม่', 'Forfeit & Re-Draw')}</span>
+              <span>{t('สละสิทธิ์ & เปิดสิทธิ์ผู้บริหารจับใหม่', 'Forfeit & Unlock VIP Re-Draw')}</span>
             </button>
           </div>
         </div>
@@ -2964,19 +2974,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   if (!target) return;
                   showConfirmDialog({
                     variant: 'danger',
-                    title: t('ยืนยันการตัดสิทธิ์ & จับรางวัลใหม่', 'Confirm Forfeit & Re-Draw'),
+                    title: t('ยืนยันการตัดสิทธิ์ & เปิดสิทธิ์ผู้บริหารจับใหม่', 'Confirm Forfeit & Unlock VIP Re-Draw'),
                     message: t(
-                      `ต้องการตัดสิทธิ์ "${target.winnerName}" ถาวร และเริ่มจับรางวัล "${target.prizeName}" ใหม่ทันทีหรือไม่?`,
-                      `Permanently disqualify "${target.winnerName}" and re-draw "${target.prizeName}"?`
+                      `ต้องการตัดสิทธิ์ "${target.winnerName}" ถาวร คืนรางวัล "${target.prizeName}" และเปิดสิทธิ์ให้ผู้บริหารกดปุ่มจับรางวัลใหม่เองหรือไม่?`,
+                      `Permanently disqualify "${target.winnerName}", restore "${target.prizeName}", and unlock VIP Executive button for re-draw?`
                     ),
-                    confirmText: t('ตัดสิทธิ์ & จับใหม่ทันที', 'Forfeit & Re-Draw'),
-                    onConfirm: () => handleConfirmForfeitAndRedraw(target, true),
+                    confirmText: t('ตัดสิทธิ์ & เปิดสิทธิ์ผู้บริหาร', 'Forfeit & Unlock VIP'),
+                    onConfirm: () => handleConfirmForfeitAndRedraw(target),
                   });
                 }}
                 className="w-full min-h-[42px] py-2 px-4 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-400/50 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
               >
                 <RotateCw className="w-3.5 h-3.5" />
-                <span>{t('สละสิทธิ์ / ผิดกติกา & จับรางวัลเดิมใหม่', 'Forfeit & Re-Draw This Prize')}</span>
+                <span>{t('สละสิทธิ์ / ผิดกติกา & เปิดสิทธิ์ผู้บริหารจับใหม่', 'Forfeit & Unlock VIP Re-Draw')}</span>
               </button>
             </div>
 
@@ -3038,22 +3048,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <p className="text-xs text-slate-600 dark:text-purple-200/80 leading-relaxed mb-5">
               {t(
-                'กดยืนยันด้านล่างเพื่อนำรายชื่อผู้ที่จับได้แล้วไม่มารับรางวัลออก (จะถูกตัดสิทธิ์ไม่ให้ลุ้นรางวัลอีกตลอดงาน) และเริ่มขั้นตอนจับรางวัลเดิมใหม่อีกครั้งทันที',
-                'Confirm below to remove this winner, permanently disqualify them from remaining draws, and immediately restart the draw for the same prize.'
+                'กดยืนยันด้านล่างเพื่อนำรายชื่อผู้ที่จับได้แล้วไม่มารับรางวัลออก (ตัดสิทธิ์ไม่ให้ลุ้นรางวัลอีกตลอดงาน) คืนรางวัลเดิม และเปิดสิทธิ์ให้ผู้บริหารกดปุ่มจับรางวัลใหม่เอง',
+                'Confirm below to remove this winner, permanently disqualify them from remaining draws, restore the prize, and unlock the VIP Executive button for the replacement draw.'
               )}
             </p>
 
             <div className="space-y-2.5">
               <button
                 type="button"
-                onClick={() => handleConfirmForfeitAndRedraw(expiredWinnerPrompt, true)}
+                onClick={() => handleConfirmForfeitAndRedraw(expiredWinnerPrompt)}
                 className="w-full min-h-[50px] py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 via-orange-500 to-amber-500 hover:brightness-110 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-rose-500/30 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
               >
                 <Ban className="w-4 h-4 shrink-0" />
                 <span>
                   {t(
-                    'ยืนยัน: ตัดสิทธิ์ออก & เริ่มจับรางวัลเดิมใหม่ทันที',
-                    'Confirm: Disqualify Winner & Re-Draw Same Prize'
+                    'ยืนยัน: ตัดสิทธิ์ออก & เปิดสิทธิ์ผู้บริหารจับใหม่',
+                    'Confirm: Disqualify & Unlock VIP Re-Draw'
                   )}
                 </span>
               </button>
