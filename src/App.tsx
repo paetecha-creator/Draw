@@ -539,6 +539,7 @@ export default function App() {
                 prizes={prizes}
                 config={config}
                 candidates={registrations}
+                totalRosterCount={roster.length}
                 onBackToTicket={() => setCurrentView('ticket')}
                 hasMyPass={!!myRegistration}
               />

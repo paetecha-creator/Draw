@@ -329,7 +329,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         throw new Error(t('ไม่พบข้อมูลพนักงานที่ถูกต้องในไฟล์', 'No valid employee rows found in the file'));
       }
 
-      onUpdateRoster(newRoster);
+      const blockedIds = new Set(
+        roster.filter((r) => r.isBlockedFromDraw).map((r) => r.id.trim().toUpperCase())
+      );
+      const mergedRoster = newRoster.map((emp) => ({
+        ...emp,
+        isBlockedFromDraw: emp.isBlockedFromDraw || blockedIds.has(emp.id.trim().toUpperCase()),
+      }));
+
+      onUpdateRoster(mergedRoster);
       soundFX.playCelebrationChime();
       setExcelImportMessage({
         type: 'success',
@@ -1531,90 +1539,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* FAIR CHANCE & BLOCKING CONTROLS — Hidden behind small icon until PIN 25102612 is entered */}
-          {!isFairChanceUnlocked ? (
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  soundFX.playClick();
-                  setIsFairChancePinModalOpen(true);
-                }}
-                className="w-9 h-9 rounded-xl bg-white/80 dark:bg-[#140a2b] hover:bg-fuchsia-50 dark:hover:bg-white/10 border border-fuchsia-200 dark:border-purple-500/30 hover:border-fuchsia-400 text-slate-400 dark:text-purple-400/60 hover:text-fuchsia-600 dark:hover:text-cyan-300 flex items-center justify-center transition cursor-pointer"
-                title={t('การคัดกรอง & บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม', 'Fair-Chance Filtering & Group Blocking')}
-                aria-label={t('เปิดเมนูการคัดกรองสิทธิ์', 'Open Fair-Chance Filter Menu')}
-              >
-                <ShieldAlert className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="p-5 sm:p-6 rounded-3xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-fuchsia-300/80 dark:border-fuchsia-500/40 animate-in fade-in duration-200 shadow-lg">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div>
-                  <h4 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-fuchsia-600 dark:text-cyan-400" />
-                    <span>{t('การคัดกรอง & บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม', 'Fair-Chance Filtering & Group Blocking')}</span>
-                  </h4>
-                  <p className="text-xs text-slate-600 dark:text-purple-200/80 mt-0.5">
-                    {t(
-                      'ตั้งค่าบล็อคกลุ่ม เช่น คณะผู้บริหาร หรือผู้ที่เคยได้รับรางวัล เพื่อกระจายโอกาส',
-                      'Block specific roles/groups or previous winners to keep the draw fair.'
-                    )}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-300 font-bold">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{t('ไม่แจกซ้ำรหัสเดิม: เปิดใช้งานตลอด', 'No Duplicate Winners: Always On')}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundFX.playClick();
-                      setIsFairChanceUnlocked(false);
-                    }}
-                    className="min-h-[36px] px-3 py-1 rounded-lg bg-fuchsia-50 dark:bg-[#0b051c] hover:bg-fuchsia-100 dark:hover:bg-white/10 border border-fuchsia-200 dark:border-purple-500/30 text-[11px] text-slate-600 dark:text-purple-200 font-bold cursor-pointer"
-                  >
-                    {t('ซ่อนเมนู', 'Hide Menu')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 dark:text-purple-100 block">
-                  {t('เลือกกลุ่มหรือบทบาทที่ต้องการบล็อคจากการจับรางวัล:', 'Select groups or roles to exclude from the draw:')}
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {allGroups.map((groupName) => {
-                    const isBlocked = blockedGroupSet.has(groupName);
-                    return (
-                      <button
-                        key={groupName}
-                        type="button"
-                        onClick={() => handleToggleBlockedGroup(groupName)}
-                        className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border-2 transition cursor-pointer ${
-                          isBlocked
-                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/50'
-                            : 'bg-emerald-50/70 dark:bg-[#0b051c] text-slate-800 dark:text-purple-100 border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-500/10'
-                        }`}
-                      >
-                        {isBlocked ? (
-                          <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                        ) : (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                        )}
-                        <span>{groupName}</span>
-                        <span className="text-[11px] font-mono">
-                          {isBlocked ? t('(บล็อคอยู่)', '(Blocked)') : t('(มีสิทธิ์)', '(Eligible)')}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1964,6 +1888,91 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </table>
             </div>
           </div>
+
+          {/* FAIR CHANCE & BLOCKING CONTROLS — Hidden behind small icon in Checked-in List tab until PIN 25102612 is entered */}
+          {!isFairChanceUnlocked ? (
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  soundFX.playClick();
+                  setIsFairChancePinModalOpen(true);
+                }}
+                className="w-9 h-9 rounded-xl bg-white/80 dark:bg-[#140a2b] hover:bg-fuchsia-50 dark:hover:bg-white/10 border border-fuchsia-200 dark:border-purple-500/30 hover:border-fuchsia-400 text-slate-400 dark:text-purple-400/60 hover:text-fuchsia-600 dark:hover:text-cyan-300 flex items-center justify-center transition cursor-pointer"
+                title={t('การคัดกรอง & บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม', 'Fair-Chance Filtering & Group Blocking')}
+                aria-label={t('เปิดเมนูการคัดกรองสิทธิ์', 'Open Fair-Chance Filter Menu')}
+              >
+                <ShieldAlert className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="p-5 sm:p-6 rounded-3xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-fuchsia-300/80 dark:border-fuchsia-500/40 animate-in fade-in duration-200 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h4 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-fuchsia-600 dark:text-cyan-400" />
+                    <span>{t('การคัดกรอง & บล็อคกลุ่มผู้ใช้งานเพื่อความยุติธรรม', 'Fair-Chance Filtering & Group Blocking')}</span>
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-purple-200/80 mt-0.5">
+                    {t(
+                      'ตั้งค่าบล็อคกลุ่ม เช่น คณะผู้บริหาร หรือผู้ที่เคยได้รับรางวัล เพื่อกระจายโอกาส',
+                      'Block specific roles/groups or previous winners to keep the draw fair.'
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-300 font-bold">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{t('ไม่แจกซ้ำรหัสเดิม: เปิดใช้งานตลอด', 'No Duplicate Winners: Always On')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      soundFX.playClick();
+                      setIsFairChanceUnlocked(false);
+                    }}
+                    className="min-h-[36px] px-3 py-1 rounded-lg bg-fuchsia-50 dark:bg-[#0b051c] hover:bg-fuchsia-100 dark:hover:bg-white/10 border border-fuchsia-200 dark:border-purple-500/30 text-[11px] text-slate-600 dark:text-purple-200 font-bold cursor-pointer"
+                  >
+                    {t('ซ่อนเมนู', 'Hide Menu')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 dark:text-purple-100 block">
+                  {t('เลือกกลุ่มหรือบทบาทที่ต้องการบล็อคจากการจับรางวัล:', 'Select groups or roles to exclude from the draw:')}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {allGroups.map((groupName) => {
+                    const isBlocked = blockedGroupSet.has(groupName);
+                    return (
+                      <button
+                        key={groupName}
+                        type="button"
+                        onClick={() => handleToggleBlockedGroup(groupName)}
+                        className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border-2 transition cursor-pointer ${
+                          isBlocked
+                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-400/50'
+                            : 'bg-emerald-50/70 dark:bg-[#0b051c] text-slate-800 dark:text-purple-100 border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100/70 dark:hover:bg-emerald-500/10'
+                        }`}
+                      >
+                        {isBlocked ? (
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        )}
+                        <span>{groupName}</span>
+                        <span className="text-[11px] font-mono">
+                          {isBlocked ? t('(บล็อคอยู่)', '(Blocked)') : t('(มีสิทธิ์)', '(Eligible)')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1981,8 +1990,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </h3>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
                   {t(
-                    'รองรับไฟล์ .xlsx และ .csv ระบบจะผูกรหัสพนักงานกับหมายเลขโต๊ะเพื่อแสดงให้พนักงานทราบทันทีหลังลงทะเบียน',
-                    'Supports .xlsx and .csv files. Employee IDs will automatically match their assigned table after check-in.'
+                    'รองรับไฟล์ .xlsx และ .csv ระบบจะแทนที่ฐานข้อมูลรายชื่อพนักงานและหมายเลขโต๊ะเดิมทั้งหมดตามไฟล์ที่อัปโหลด (ไม่ลบรายชื่อผู้ลงทะเบียนเข้างานแล้ว)',
+                    'Supports .xlsx and .csv files. Importing replaces the entire employee & table roster with the uploaded file (existing check-ins are preserved).'
                   )}
                 </p>
               </div>
@@ -1991,7 +2000,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 type="button"
                 onClick={() => {
                   soundFX.playClick();
-                  downloadSampleExcelTemplate();
+                  downloadSampleExcelTemplate(roster);
                 }}
                 className="min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold border border-zinc-300 dark:border-zinc-700 flex items-center justify-center gap-2 transition cursor-pointer shrink-0"
               >
@@ -2060,11 +2069,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-xs">
                       <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{emp.id}</span>
-                      {emp.isBlockedFromDraw && (
-                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold">
-                          {t('บล็อค', 'Blocked')}
-                        </span>
-                      )}
                     </div>
                     <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
                       {emp.fullName} {emp.nickname ? `(${emp.nickname})` : ''}
@@ -2093,7 +2097,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <th className="py-2.5 px-4">{t('แผนก', 'Department')}</th>
                     <th className="py-2.5 px-4">{t('หมายเลขโต๊ะที่จัดสรร', 'Assigned Table')}</th>
                     <th className="py-2.5 px-4">{t('กลุ่ม / บทบาท', 'Group / Role')}</th>
-                    <th className="py-2.5 px-4 text-center">{t('สถานะบล็อค', 'Block Status')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
@@ -2116,17 +2119,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </td>
                       <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
                         {emp.groupRole || t('พนักงานทั่วไป', 'General Staff')}
-                      </td>
-                      <td className="py-2.5 px-4 text-center">
-                        {emp.isBlockedFromDraw ? (
-                          <span className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold">
-                            {t('บล็อค', 'Blocked')}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-zinc-500">
-                            {t('ปกติ', 'Normal')}
-                          </span>
-                        )}
                       </td>
                     </tr>
                   ))}

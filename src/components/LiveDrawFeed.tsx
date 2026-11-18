@@ -14,6 +14,10 @@ import {
   Shuffle,
   Zap,
   AlertCircle,
+  Users,
+  UserCheck,
+  TrendingUp,
+  CheckCircle2,
 } from 'lucide-react';
 import { AttendeeRegistration, LuckyDrawRecord, PartyConfig, Prize } from '../types/party';
 import { soundFX } from '../utils/audio';
@@ -24,6 +28,7 @@ interface LiveDrawFeedProps {
   prizes: Prize[];
   config: PartyConfig;
   candidates?: AttendeeRegistration[];
+  totalRosterCount?: number;
   onBackToTicket: () => void;
   hasMyPass: boolean;
 }
@@ -42,6 +47,7 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
   prizes,
   config,
   candidates = [],
+  totalRosterCount = 0,
   onBackToTicket,
   hasMyPass,
 }) => {
@@ -104,6 +110,41 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
   useEffect(() => {
     shufflePoolRef.current = shufflePool;
   }, [shufflePool]);
+
+  // Real-time Registration Statistics & Latest 10 Checked-in Attendees (for LIVE while registration is open)
+  const registrationStats = useMemo(() => {
+    const checkedInCount = candidates.length;
+    const totalEmployees = totalRosterCount > 0 ? totalRosterCount : checkedInCount;
+    const attendancePercent =
+      totalEmployees > 0 ? Math.min(100, Math.round((checkedInCount / totalEmployees) * 100)) : 0;
+    const remainingToCheckIn = Math.max(0, totalEmployees - checkedInCount);
+
+    const deptCounts = new Map<string, number>();
+    candidates.forEach((c) => {
+      const dept = c.department || 'ทั่วไป';
+      deptCounts.set(dept, (deptCounts.get(dept) || 0) + 1);
+    });
+    const topDepartments = Array.from(deptCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4);
+
+    const latestTen = [...candidates]
+      .sort((a, b) => {
+        const tA = Date.parse(a.registeredAt || '') || 0;
+        const tB = Date.parse(b.registeredAt || '') || 0;
+        return tB - tA;
+      })
+      .slice(0, 10);
+
+    return {
+      checkedInCount,
+      totalEmployees,
+      attendancePercent,
+      remainingToCheckIn,
+      topDepartments,
+      latestTen,
+    };
+  }, [candidates, totalRosterCount]);
 
   // Trigger dramatic multi-stage random reel animation whenever a new winner arrives
   useEffect(() => {
@@ -280,11 +321,21 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
           <p className="text-xs font-bold mb-0.5 truncate bg-gradient-to-r from-fuchsia-600 via-orange-500 to-cyan-600 dark:from-amber-300 dark:via-fuchsia-400 dark:to-cyan-300 bg-clip-text text-transparent">
             {config.eventName} · LIVE STAGE
           </p>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
-            <span>{t('LIVE ประกาศผลรางวัล Lucky Draw', 'LIVE Lucky Draw Results')}</span>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight flex items-center gap-2 flex-wrap">
+            <span>
+              {config.isRegistrationOpen && winners.length === 0 && !isAnimatingDraw
+                ? t('LIVE รายงานการลงทะเบียนเข้างาน', 'LIVE Check-in Tracker')
+                : t('LIVE ประกาศผลรางวัล Lucky Draw', 'LIVE Lucky Draw Results')}
+            </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-black tracking-widest uppercase animate-pulse">
               LIVE
             </span>
+            {config.isRegistrationOpen && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40 text-[10px] font-extrabold uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                {t('เปิดลงทะเบียน', 'CHECK-IN OPEN')}
+              </span>
+            )}
           </h2>
         </div>
 
@@ -645,7 +696,7 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
             </div>
           </div>
         </div>
-      ) : (
+      ) : config.isRegistrationOpen ? null : (
         <div className="mb-8 p-8 rounded-3xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-fuchsia-300/60 dark:border-fuchsia-500/40 text-center shadow-xl">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-fuchsia-500 via-orange-500 to-amber-400 flex items-center justify-center mx-auto mb-3 text-white shadow-lg animate-float">
             <Trophy className="w-8 h-8" />
@@ -659,6 +710,221 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
               'Verified winner photos and names will appear live on this screen as soon as each round is drawn.'
             )}
           </p>
+        </div>
+      )}
+
+      {/* =========================================================================
+          REAL-TIME CHECK-IN STATISTICS & LATEST 10 REGISTRATIONS (When registration is OPEN)
+      ========================================================================= */}
+      {config.isRegistrationOpen && !isAnimatingDraw && (
+        <div className="mb-8 space-y-5">
+          {/* Registration Stats Card */}
+          <div className="rounded-3xl p-[2px] bg-gradient-to-r from-emerald-400 via-cyan-400 to-fuchsia-500 shadow-xl shadow-cyan-500/15">
+            <div className="rounded-[22px] bg-white/95 dark:bg-[#140a2b]/95 p-5 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white shadow-md shrink-0">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-300 uppercase tracking-wider">
+                      {t('LIVE CHECK-IN STATISTICS', 'LIVE CHECK-IN STATISTICS')}
+                    </div>
+                    <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-white">
+                      {t('สถิติการลงทะเบียนเข้างานแบบเรียลไทม์', 'Real-Time Event Check-in Statistics')}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40 text-xs font-extrabold self-start sm:self-center">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span>{t('กำลังเปิดรับลงทะเบียน', 'Registration Open')}</span>
+                </div>
+              </div>
+
+              {/* 3 KPI Tiles */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-500/15 dark:to-teal-500/10 border border-emerald-300/70 dark:border-emerald-400/40">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300 mb-1">
+                    <span>{t('ลงทะเบียนเข้างานแล้ว', 'Checked In')}</span>
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div className="text-3xl font-black text-emerald-700 dark:text-emerald-300 font-mono tabular-nums">
+                    {registrationStats.checkedInCount.toLocaleString()}{' '}
+                    <span className="text-xs font-semibold font-sans">{t('คน', 'guests')}</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-500/15 dark:to-blue-500/10 border border-cyan-300/70 dark:border-cyan-400/40">
+                  <div className="flex items-center justify-between text-xs font-bold text-cyan-700 dark:text-cyan-300 mb-1">
+                    <span>{t('อัตราการเข้าร่วมงาน', 'Check-in Rate')}</span>
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div className="text-3xl font-black text-cyan-700 dark:text-cyan-300 font-mono tabular-nums">
+                    {registrationStats.attendancePercent}%
+                    <span className="text-xs font-semibold font-sans ml-1.5 text-cyan-700/80 dark:text-cyan-200/80">
+                      ({registrationStats.checkedInCount}/{registrationStats.totalEmployees})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-fuchsia-50 to-amber-50 dark:from-fuchsia-500/15 dark:to-amber-500/10 border border-fuchsia-300/70 dark:border-fuchsia-400/40">
+                  <div className="flex items-center justify-between text-xs font-bold text-fuchsia-700 dark:text-amber-300 mb-1">
+                    <span>{t('รายชื่อพนักงานทั้งหมด', 'Total Roster')}</span>
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div className="text-3xl font-black text-fuchsia-700 dark:text-amber-300 font-mono tabular-nums">
+                    {registrationStats.totalEmployees.toLocaleString()}{' '}
+                    <span className="text-xs font-semibold font-sans">{t('คน', 'staff')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div>
+                <div className="flex items-center justify-between text-[11px] font-bold text-zinc-600 dark:text-zinc-300 mb-1.5">
+                  <span>
+                    {t(
+                      `ความคืบหน้าการเช็คอินเข้างาน (${registrationStats.attendancePercent}%)`,
+                      `Check-in Progress (${registrationStats.attendancePercent}%)`
+                    )}
+                  </span>
+                  <span className="font-mono tabular-nums">
+                    {t(
+                      `รอลงทะเบียนอีก ${registrationStats.remainingToCheckIn.toLocaleString()} คน`,
+                      `${registrationStats.remainingToCheckIn.toLocaleString()} pending`
+                    )}
+                  </span>
+                </div>
+                <div className="h-3 w-full rounded-full bg-zinc-200 dark:bg-white/10 overflow-hidden p-0.5">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-cyan-400 to-fuchsia-500 transition-all duration-500"
+                    style={{ width: `${Math.max(registrationStats.checkedInCount > 0 ? 3 : 0, registrationStats.attendancePercent)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Top Checked-in Departments */}
+              {registrationStats.topDepartments.length > 0 && (
+                <div className="mt-4 pt-3.5 border-t border-zinc-200/80 dark:border-white/10 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+                    {t('แผนกที่เข้างานสูงสุด:', 'Top Departments:')}
+                  </span>
+                  {registrationStats.topDepartments.map(([dept, count]) => (
+                    <span
+                      key={dept}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-300/60 dark:border-cyan-400/30 text-[11px] font-bold text-cyan-800 dark:text-cyan-200"
+                    >
+                      <span>{dept}</span>
+                      <span className="font-mono text-fuchsia-600 dark:text-amber-300">{count}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Latest 10 Checked-in Attendees Feed */}
+          <div className="rounded-3xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-cyan-300/70 dark:border-cyan-400/40 p-5 sm:p-6 shadow-xl">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
+                <h3 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-white">
+                  {t('รายชื่อผู้ลงทะเบียนล่าสุด 10 ลำดับ', 'Latest 10 Checked-in Guests')}
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-cyan-700 dark:text-cyan-300">
+                {t(`แสดง ${registrationStats.latestTen.length} รายการล่าสุด`, `Showing latest ${registrationStats.latestTen.length}`)}
+              </span>
+            </div>
+
+            {registrationStats.latestTen.length > 0 ? (
+              <div className="space-y-2.5">
+                {registrationStats.latestTen.map((att, idx) => {
+                  const isNewest = idx === 0;
+                  return (
+                    <div
+                      key={att.id}
+                      className={`p-3 rounded-2xl border flex items-center gap-3 transition-all ${
+                        isNewest
+                          ? 'bg-gradient-to-r from-emerald-50 via-cyan-50 to-fuchsia-50 dark:from-emerald-500/15 dark:via-cyan-500/15 dark:to-fuchsia-500/15 border-emerald-400 dark:border-emerald-400/60 shadow-md'
+                          : 'bg-zinc-50/80 dark:bg-[#0b051c]/80 border-zinc-200 dark:border-purple-500/25'
+                      }`}
+                    >
+                      <div
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono text-xs font-black shrink-0 ${
+                          isNewest
+                            ? 'bg-gradient-to-br from-emerald-500 to-cyan-500 text-white shadow'
+                            : 'bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300'
+                        }`}
+                      >
+                        {idx + 1}
+                      </div>
+
+                      <div className="w-11 h-12 rounded-xl overflow-hidden bg-zinc-200 dark:bg-zinc-900 border border-fuchsia-300/60 dark:border-cyan-400/40 shrink-0">
+                        {att.selfieUrl ? (
+                          <img
+                            src={att.selfieUrl}
+                            alt={att.fullName}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                            {att.fullName.slice(0, 2)}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs sm:text-sm font-extrabold text-zinc-900 dark:text-white truncate">
+                            {att.fullName}
+                          </span>
+                          {att.nickname && (
+                            <span className="text-xs font-bold text-fuchsia-600 dark:text-amber-300">
+                              ({att.nickname})
+                            </span>
+                          )}
+                          <span className="text-[11px] font-mono font-bold text-cyan-700 dark:text-cyan-300">
+                            {att.employeeId}
+                          </span>
+                          {isNewest && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-white text-[9px] font-black tracking-wider uppercase animate-pulse">
+                              {t('ล่าสุด', 'NEW')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-zinc-600 dark:text-zinc-300 truncate mt-0.5">
+                          {att.department} · <span className="font-bold text-amber-700 dark:text-amber-300">{att.tableNumber}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-[11px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400 block">
+                          {new Date(att.registeredAt).toLocaleTimeString(lang === 'en' ? 'en-US' : 'th-TH', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          {t('เช็คอินแล้ว', 'Checked In')}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-8 rounded-2xl bg-zinc-50 dark:bg-[#0b051c]/70 border border-dashed border-cyan-300/70 dark:border-cyan-500/30 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                {t(
+                  'ยังไม่มีผู้ลงทะเบียนเข้างาน — รายชื่อผู้เช็คอิน 10 ลำดับล่าสุดจะแสดงขึ้นที่นี่แบบเรียลไทม์ทันทีที่สแกนลงทะเบียน',
+                  'No check-ins yet — the latest 10 registered guests will appear here in real time.'
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
