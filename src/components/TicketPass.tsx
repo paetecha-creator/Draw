@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Sparkles, Trophy, MapPin, Calendar, CheckCircle2, QrCode, ArrowRight, Share2, Phone } from 'lucide-react';
+import { Sparkles, MapPin, Calendar, CheckCircle2, QrCode, Share2, Phone } from 'lucide-react';
 import { AttendeeRegistration, PartyConfig } from '../types/party';
 import { soundFX } from '../utils/audio';
 import { usePreferences } from '../contexts/PreferencesContext';
@@ -9,14 +9,12 @@ import { PartyDialogModal, PartyDialogState } from './PartyDialogModal';
 interface TicketPassProps {
   registration: AttendeeRegistration;
   config: PartyConfig;
-  onViewLiveDraw: () => void;
   onRegisterAnother: () => void;
 }
 
 export const TicketPass: React.FC<TicketPassProps> = ({
   registration,
   config,
-  onViewLiveDraw,
   onRegisterAnother,
 }) => {
   const { t } = usePreferences();
@@ -150,19 +148,6 @@ export const TicketPass: React.FC<TicketPassProps> = ({
 
       {/* CTA Actions */}
       <div className="w-full mt-4 flex flex-col gap-2.5">
-        <button
-          type="button"
-          onClick={() => {
-            soundFX.playClick();
-            onViewLiveDraw();
-          }}
-          className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-gradient-to-r from-fuchsia-500 via-orange-500 to-amber-400 hover:brightness-110 text-white font-bold text-sm shadow-lg shadow-fuchsia-500/25 flex items-center justify-center gap-2 active:scale-[0.98] transition cursor-pointer"
-        >
-          <Trophy className="w-5 h-5" />
-          <span>{t('ดูผลรางวัล LIVE', 'Watch LIVE Draw')}</span>
-          <ArrowRight className="w-4 h-4 ml-auto" />
-        </button>
-
         <div className="flex items-center gap-2">
           <button
             type="button"

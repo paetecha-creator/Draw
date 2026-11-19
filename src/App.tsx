@@ -45,18 +45,30 @@ export default function App() {
     throw asyncError;
   }
 
-  // Navigation View State
+  // Navigation View State (Supports direct ?vip=1 / #vip for Executive remote & ?live=1 / #live for Stage Projector)
   const [currentView, setCurrentView] = useState<'register' | 'ticket' | 'livedraw' | 'admin' | 'vip'>(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       if (searchParams.get('vip') === '1' || searchParams.get('vip') === 'true' || window.location.hash === '#vip') {
         return 'vip';
       }
+      if (searchParams.get('live') === '1' || searchParams.get('live') === 'true' || window.location.hash === '#live') {
+        return 'livedraw';
+      }
     }
     return 'register';
   });
 
-  const [myRegistration, setMyRegistration] = useState<AttendeeRegistration | null>(null);
+  const [myRegistration, setMyRegistration] = useState<AttendeeRegistration | null>(() => {
+    const cachedPass = FirestoreService.getMyRegistrationCached();
+    if (cachedPass) return cachedPass;
+    const myId = FirestoreService.getMyRegistrationId();
+    if (!myId) return null;
+    return FirestoreService.getCachedRegistrations().find((r) => r.id === myId) || null;
+  });
+  const [liveRosterCount, setLiveRosterCount] = useState<number>(() =>
+    FirestoreService.getCachedRoster().length
+  );
 
   // Admin Auth State (Unlocked via Numpad PIN: 236248)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
@@ -64,38 +76,39 @@ export default function App() {
   });
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const isVipDrawingRef = useRef(false);
-  const lastLocalConfigWriteAtRef = useRef(0);
 
-  // Sync my personal pass when registrations update from Firestore
+  // Keep personal pass synced with cached/live registrations without extra reads
   useEffect(() => {
     const myId = FirestoreService.getMyRegistrationId();
-    if (myId) {
-      const match = registrations.find((r) => r.id === myId);
-      setMyRegistration(match || null);
-    } else {
+    if (!myId) {
       setMyRegistration(null);
+      return;
+    }
+    const liveMatch = registrations.find((r) => r.id === myId);
+    if (liveMatch) {
+      setMyRegistration(liveMatch);
+      FirestoreService.setMyRegistrationCached(liveMatch);
+      return;
+    }
+    if (!myRegistration) {
+      const cachedPass = FirestoreService.getMyRegistrationCached();
+      if (cachedPass && cachedPass.id === myId) {
+        setMyRegistration(cachedPass);
+      } else {
+        FirestoreService.fetchMyRegistrationById(myId).then((fetched) => {
+          if (fetched) setMyRegistration(fetched);
+        });
+      }
     }
   }, [registrations]);
 
-  // Subscribe to Firebase Firestore collections in real time & seed in background without blocking UI
+  // Core lightweight real-time subscription: ONLY config (1 doc) + local tab BroadcastChannel.
+  // Zero polling! Push-only updates exclusively when Firestore documents change.
   useEffect(() => {
     let isMounted = true;
-
     const unsubs = [
       FirestoreService.subscribeConfig((freshConfig) => {
         if (isMounted) setConfig(freshConfig);
-      }),
-      FirestoreService.subscribeRoster((freshRoster) => {
-        if (isMounted) setRoster(freshRoster);
-      }),
-      FirestoreService.subscribePrizes((freshPrizes) => {
-        if (isMounted) setPrizes(freshPrizes);
-      }),
-      FirestoreService.subscribeRegistrations((freshRegs) => {
-        if (isMounted) setRegistrations(freshRegs);
-      }),
-      FirestoreService.subscribeLuckyWinners((freshWinners) => {
-        if (isMounted) setLuckyWinners(freshWinners);
       }),
       FirestoreService.subscribeLocalSync((area) => {
         if (!isMounted) return;
@@ -107,99 +120,76 @@ export default function App() {
       }),
     ];
 
-    FirestoreService.ensureInitialSeed()
-      .catch((err) => {
-        if (!isMounted) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.toLowerCase().includes('permission')) {
-          setAsyncError(err instanceof Error ? err : new Error(msg));
-        } else {
-          console.warn('Background Firestore seed notice:', msg);
-        }
-      })
-      .finally(() => {
-        if (isMounted) setIsInitialLoading(false);
-      });
-
     return () => {
       isMounted = false;
       unsubs.forEach((unsub) => unsub());
     };
   }, []);
 
-  // Active server-sync safeguard for cross-device VIP Remote & LIVE screens
-  // (guarantees real-time updates even if mobile WebChannel/long-polling is paused or throttled)
+  // View-scoped event-driven real-time subscriptions:
+  // Regular attendees (register / ticket) NEVER subscribe to full collections — saving >99% Firestore free quota!
+  // Admin, LIVE stage projector, and VIP remote use native onSnapshot push updates (only when data changes).
   useEffect(() => {
+    const needsLiveCollections =
+      currentView === 'admin' || currentView === 'livedraw' || currentView === 'vip';
+
+    if (!needsLiveCollections) {
+      return;
+    }
+
     let isMounted = true;
-    const syncConfigNow = async () => {
-      if (Date.now() - lastLocalConfigWriteAtRef.current < 2500) return;
-      const serverCfg = await FirestoreService.refreshConfigFromServer();
-      if (!isMounted || !serverCfg) return;
-      if (Date.now() - lastLocalConfigWriteAtRef.current < 2500) return;
-      setConfig((prev) => {
-        if (
-          prev.isVipTriggerActive === serverCfg.isVipTriggerActive &&
-          prev.vipActivePrizeId === serverCfg.vipActivePrizeId &&
-          prev.isRegistrationOpen === serverCfg.isRegistrationOpen &&
-          prev.claimCountdownEndAt === serverCfg.claimCountdownEndAt &&
-          prev.claimCountdownWinnerId === serverCfg.claimCountdownWinnerId &&
-          prev.eventName === serverCfg.eventName &&
-          JSON.stringify(prev.blockedGroups) === JSON.stringify(serverCfg.blockedGroups)
-        ) {
-          return prev;
+    const unsubs: Array<() => void> = [
+      FirestoreService.subscribePrizes((freshPrizes) => {
+        if (isMounted) setPrizes(freshPrizes);
+      }),
+      FirestoreService.subscribeRegistrations((freshRegs) => {
+        if (isMounted) setRegistrations(freshRegs);
+      }),
+      FirestoreService.subscribeLuckyWinners((freshWinners) => {
+        if (isMounted) setLuckyWinners(freshWinners);
+      }),
+    ];
+
+    // Subscribe to full roster only in Admin & VIP; on LIVE projector use a 1-read count query
+    if (currentView === 'admin' || currentView === 'vip') {
+      unsubs.push(
+        FirestoreService.subscribeRoster((freshRoster) => {
+          if (isMounted) {
+            setRoster(freshRoster);
+            setLiveRosterCount(freshRoster.length);
+          }
+        })
+      );
+    } else if (currentView === 'livedraw') {
+      FirestoreService.fetchRosterCount().then((count) => {
+        if (isMounted && count !== null) {
+          setLiveRosterCount(count);
         }
-        return serverCfg;
       });
-    };
-
-    const syncCollectionsNow = async () => {
-      const fresh = await FirestoreService.refreshLiveCollectionsFromServer();
-      if (!isMounted) return;
-      if (fresh.prizes) setPrizes(fresh.prizes);
-      if (fresh.registrations) setRegistrations(fresh.registrations);
-      if (fresh.luckyWinners) setLuckyWinners(fresh.luckyWinners);
-    };
-
-    // Immediate sync on view switch & when returning to tab/phone screen
-    syncConfigNow();
-    if (currentView === 'vip' || currentView === 'livedraw') {
-      syncCollectionsNow();
     }
 
-    const handleVisibilityOrFocus = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      syncConfigNow();
-      if (currentView === 'vip' || currentView === 'livedraw') {
-        syncCollectionsNow();
-      }
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('focus', handleVisibilityOrFocus);
+    // Only run initial seed check from Admin view so 1,000 attendees never trigger seed checks
+    if (currentView === 'admin' && isAdminLoggedIn) {
+      FirestoreService.ensureInitialSeed()
+        .catch((err) => {
+          if (!isMounted) return;
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.toLowerCase().includes('permission')) {
+            setAsyncError(err instanceof Error ? err : new Error(msg));
+          } else {
+            console.warn('Background Firestore seed notice:', msg);
+          }
+        })
+        .finally(() => {
+          if (isMounted) setIsInitialLoading(false);
+        });
     }
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    }
-
-    const configPollMs = currentView === 'vip' || currentView === 'livedraw' ? 1500 : 5000;
-    const configTimer = setInterval(syncConfigNow, configPollMs);
-    const collectionsTimer =
-      currentView === 'vip' || currentView === 'livedraw'
-        ? setInterval(syncCollectionsNow, 4500)
-        : null;
 
     return () => {
       isMounted = false;
-      clearInterval(configTimer);
-      if (collectionsTimer) clearInterval(collectionsTimer);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('focus', handleVisibilityOrFocus);
-      }
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      }
+      unsubs.forEach((unsub) => unsub());
     };
-  }, [currentView]);
+  }, [currentView, isAdminLoggedIn]);
 
   // Compute eligible candidates (strictly exclude ALL previous winners and any disqualified/blocked guests)
   const eligibleCandidates = useMemo(() => {
@@ -221,12 +211,18 @@ export default function App() {
   }, [registrations, luckyWinners, config.blockedGroups, roster]);
 
   // Handlers writing directly to Firestore with instant optimistic local state updates
-  const handleRegisterSuccess = (newReg: AttendeeRegistration) => {
+  const handleRegisterSuccess = async (newReg: AttendeeRegistration) => {
     const empIdUpper = newReg.employeeId.trim().toUpperCase();
-    const alreadyRegistered = registrations.some(
+    const alreadyRegisteredLocal = registrations.some(
       (r) => r.employeeId.trim().toUpperCase() === empIdUpper
     );
-    if (alreadyRegistered) {
+    if (alreadyRegisteredLocal) {
+      throw new Error('DUPLICATE_REGISTRATION');
+    }
+
+    // 1-doc server guard so 1,000 devices enforce 1-per-ID without subscribing to full collection
+    const remoteExisting = await FirestoreService.lookupRegistrationByEmployeeId(empIdUpper);
+    if (remoteExisting) {
       throw new Error('DUPLICATE_REGISTRATION');
     }
 
@@ -245,6 +241,7 @@ export default function App() {
 
     // Instant auto-redirect to Digital Ticket Pass without waiting on network latency
     FirestoreService.setMyRegistrationId(docId);
+    FirestoreService.setMyRegistrationCached(saved);
     setRegistrations((prev) => [saved, ...prev.filter((r) => r.id !== docId)]);
     setMyRegistration(saved);
     setCurrentView('ticket');
@@ -259,7 +256,6 @@ export default function App() {
   };
 
   const handleUpdateConfig = async (newConfig: PartyConfig) => {
-    lastLocalConfigWriteAtRef.current = Date.now();
     setConfig(newConfig);
     try {
       await FirestoreService.setConfig(newConfig);
@@ -305,7 +301,6 @@ export default function App() {
         p.id === newWinner.prizeId ? { ...p, remaining: Math.max(0, p.remaining - 1) } : p
       )
     );
-    lastLocalConfigWriteAtRef.current = Date.now();
     setConfig((prev) => ({
       ...prev,
       isVipTriggerActive: false,
@@ -366,7 +361,6 @@ export default function App() {
         emp.id.trim().toUpperCase() === empUpper ? { ...emp, isBlockedFromDraw: true } : emp
       )
     );
-    lastLocalConfigWriteAtRef.current = Date.now();
     const nextConfig: PartyConfig = {
       ...config,
       isRegistrationOpen: false,
@@ -583,7 +577,6 @@ export default function App() {
                 registrations={registrations}
                 config={config}
                 onRegisterSuccess={handleRegisterSuccess}
-                onViewLiveDraw={() => setCurrentView('livedraw')}
               />
             )}
 
@@ -594,7 +587,6 @@ export default function App() {
                   <TicketPass
                     registration={myRegistration}
                     config={config}
-                    onViewLiveDraw={() => setCurrentView('livedraw')}
                     onRegisterAnother={() => setCurrentView('register')}
                   />
                 ) : (
@@ -625,7 +617,7 @@ export default function App() {
                 prizes={prizes}
                 config={config}
                 candidates={registrations}
-                totalRosterCount={roster.length}
+                totalRosterCount={liveRosterCount}
                 onBackToTicket={() => setCurrentView('ticket')}
                 hasMyPass={!!myRegistration}
               />

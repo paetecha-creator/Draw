@@ -1,8 +1,9 @@
 export function compressImageDataUrl(
   sourceDataUrl: string,
-  maxWidth = 480,
-  maxHeight = 600,
-  quality = 0.72
+  maxWidth = 240,
+  maxHeight = 300,
+  quality = 0.62,
+  maxChars = 32000
 ): Promise<string> {
   return new Promise((resolve) => {
     if (!sourceDataUrl || !sourceDataUrl.startsWith('data:image')) {
@@ -12,26 +13,48 @@ export function compressImageDataUrl(
 
     const img = new Image();
     img.onload = () => {
-      let { width, height } = img;
-      const ratio = Math.min(maxWidth / width, maxHeight / height, 1);
-      width = Math.max(1, Math.round(width * ratio));
-      height = Math.max(1, Math.round(height * ratio));
+      const ratio = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
+      let width = Math.max(1, Math.round(img.width * ratio));
+      let height = Math.max(1, Math.round(img.height * ratio));
 
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         resolve(sourceDataUrl);
         return;
       }
-      ctx.drawImage(img, 0, 0, width, height);
+
+      // Detect WebP encoder support (significantly smaller than JPEG at same clarity)
+      const renderEncoded = (w: number, h: number, mime: string, q: number): string => {
+        canvas.width = w;
+        canvas.height = h;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, w, h);
+        return canvas.toDataURL(mime, q);
+      };
+
+      const webpProbe = renderEncoded(width, height, 'image/webp', quality);
+      const mimeType = webpProbe.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
+
       let q = quality;
-      let compressed = canvas.toDataURL('image/jpeg', q);
-      while (compressed.length > 380000 && q > 0.25) {
-        q = Math.max(0.25, q - 0.12);
-        compressed = canvas.toDataURL('image/jpeg', q);
+      let compressed = mimeType === 'image/webp' ? webpProbe : renderEncoded(width, height, mimeType, q);
+
+      // Step 1: Lower encoding quality progressively
+      while (compressed.length > maxChars && q > 0.34) {
+        q = Math.max(0.34, Number((q - 0.08).toFixed(2)));
+        compressed = renderEncoded(width, height, mimeType, q);
       }
+
+      // Step 2: If still above target size, progressively downscale dimensions
+      while (compressed.length > maxChars && width > 120 && height > 120) {
+        width = Math.max(120, Math.round(width * 0.8));
+        height = Math.max(120, Math.round(height * 0.8));
+        compressed = renderEncoded(width, height, mimeType, q);
+      }
+
       resolve(compressed);
     };
     img.onerror = () => resolve(sourceDataUrl);

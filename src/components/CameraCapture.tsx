@@ -35,7 +35,7 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
     reader.onload = async (event) => {
       try {
         if (event.target?.result) {
-          const compressed = await compressImageDataUrl(event.target.result as string, 520, 650, 0.78);
+          const compressed = await compressImageDataUrl(event.target.result as string, 240, 300, 0.62, 32000);
           soundFX.playCelebrationChime();
           onCapture(compressed);
         }

@@ -477,7 +477,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const tick = () => {
       const diffMs = endMs - Date.now();
       const secs = Math.max(0, Math.ceil(diffMs / 1000));
-      setClaimSecondsLeft(secs);
+      setClaimSecondsLeft((prev) => (prev === secs ? prev : secs));
 
       if (secs === 0) {
         const targetWinnerId = config.claimCountdownWinnerId;
@@ -492,7 +492,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
 
     tick();
-    const interval = setInterval(tick, 250);
+    const interval = setInterval(tick, 500);
     return () => clearInterval(interval);
   }, [config.claimCountdownEndAt, config.claimCountdownWinnerId, luckyWinners]);
 

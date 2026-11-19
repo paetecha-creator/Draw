@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Lock, Sparkles, User, Phone, AlertCircle, ShieldCheck } from 'lucide-react';
 import { AttendeeRegistration, EmployeeRoster, PartyConfig } from '../types/party';
+import { FirestoreService } from '../services/firestoreService';
 import { CameraCapture } from './CameraCapture';
 import { PartyDialogModal, PartyDialogState } from './PartyDialogModal';
 import { soundFX } from '../utils/audio';
@@ -11,7 +12,6 @@ interface RegistrationFormProps {
   registrations: AttendeeRegistration[];
   config: PartyConfig;
   onRegisterSuccess: (registration: AttendeeRegistration) => Promise<void> | void;
-  onViewLiveDraw: () => void;
 }
 
 export const RegistrationForm: React.FC<RegistrationFormProps> = ({
@@ -19,7 +19,6 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   registrations,
   config,
   onRegisterSuccess,
-  onViewLiveDraw,
 }) => {
   const { t, lang } = usePreferences();
   const [employeeId, setEmployeeId] = useState('');
@@ -28,6 +27,10 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [matchedEmployee, setMatchedEmployee] = useState<EmployeeRoster | null>(null);
+  const [remoteDuplicate, setRemoteDuplicate] = useState<AttendeeRegistration | null>(null);
+  const lookupCacheRef = useRef<
+    Map<string, { roster: EmployeeRoster | null; registration: AttendeeRegistration | null }>
+  >(new Map());
   const [dialog, setDialog] = useState<PartyDialogState>({
     isOpen: false,
     mode: 'alert',
@@ -39,8 +42,49 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   const duplicateRegistration = useMemo(() => {
     const trimmed = employeeId.trim().toUpperCase();
     if (!trimmed) return null;
-    return registrations.find((r) => r.employeeId.trim().toUpperCase() === trimmed) || null;
-  }, [employeeId, registrations]);
+    const localDup =
+      registrations.find((r) => r.employeeId.trim().toUpperCase() === trimmed) || null;
+    if (localDup) return localDup;
+    if (remoteDuplicate && remoteDuplicate.employeeId.trim().toUpperCase() === trimmed) {
+      return remoteDuplicate;
+    }
+    return null;
+  }, [employeeId, registrations, remoteDuplicate]);
+
+  // Low-quota single-document lookup (max 2 reads per unique Employee ID after user pauses typing)
+  useEffect(() => {
+    const trimmed = employeeId.trim().toUpperCase();
+    if (trimmed.length < 2) {
+      setRemoteDuplicate(null);
+      return;
+    }
+
+    const cached = lookupCacheRef.current.get(trimmed);
+    if (cached) {
+      if (cached.roster) setMatchedEmployee(cached.roster);
+      setRemoteDuplicate(cached.registration);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const [remoteEmp, remoteReg] = await Promise.all([
+        FirestoreService.lookupRosterByEmployeeId(trimmed),
+        FirestoreService.lookupRegistrationByEmployeeId(trimmed),
+      ]);
+      if (cancelled) return;
+      lookupCacheRef.current.set(trimmed, { roster: remoteEmp, registration: remoteReg });
+      if (remoteEmp) {
+        setMatchedEmployee(remoteEmp);
+      }
+      setRemoteDuplicate(remoteReg);
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [employeeId]);
 
   if (!config.isRegistrationOpen) {
     return (
@@ -51,24 +95,12 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
           {t('ระบบลงทะเบียนปิดชั่วคราว', 'Check-in is Currently Closed')}
         </h3>
-        <p className="text-xs text-zinc-600 dark:text-zinc-300 mb-6 leading-relaxed">
+        <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
           {t(
-            'ผู้ดูแลระบบได้ปิดรับลงทะเบียนเข้างานเรียบร้อยแล้ว ขณะนี้เข้าสู่ช่วงพิธีการและกิจกรรมสุ่มจับรางวัล Lucky Draw',
-            'The organizer has closed event registration. Please head over to watch the LIVE Lucky Draw results.'
+            'ผู้ดูแลระบบได้ปิดรับลงทะเบียนเข้างานเรียบร้อยแล้ว ขณะนี้เข้าสู่ช่วงพิธีการและกิจกรรมสุ่มจับรางวัล Lucky Draw กรุณาติดตามผลรางวัลบนหน้าจอใหญ่ภายในงาน',
+            'The organizer has closed event registration. Please enjoy the event and watch the Lucky Draw results on the main stage screen.'
           )}
         </p>
-
-        <button
-          type="button"
-          onClick={() => {
-            soundFX.playClick();
-            onViewLiveDraw();
-          }}
-          className="w-full min-h-[48px] py-3 px-4 rounded-xl bg-gradient-to-r from-fuchsia-500 via-orange-500 to-amber-400 hover:brightness-110 text-white font-bold text-xs shadow-lg shadow-fuchsia-500/25 flex items-center justify-center gap-2 active:scale-98 transition cursor-pointer"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>{t('ติดตามผลรางวัล LIVE', 'Watch LIVE Results')}</span>
-        </button>
       </div>
     );
   }
@@ -100,9 +132,30 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
       return;
     }
 
-    const existingReg = registrations.find(
+    const existingLocalReg = registrations.find(
       (r) => r.employeeId.trim().toUpperCase() === trimmedId
     );
+    const cachedLookup = lookupCacheRef.current.get(trimmedId);
+    let existingReg = existingLocalReg || cachedLookup?.registration || null;
+    let latestRosterMatch =
+      cachedLookup?.roster ||
+      matchedEmployee ||
+      roster.find((emp) => emp.id.toUpperCase() === trimmedId) ||
+      null;
+
+    if (!existingReg && !cachedLookup) {
+      setIsSubmitting(true);
+      const [remoteEmp, remoteReg] = await Promise.all([
+        FirestoreService.lookupRosterByEmployeeId(trimmedId),
+        FirestoreService.lookupRegistrationByEmployeeId(trimmedId),
+      ]);
+      lookupCacheRef.current.set(trimmedId, { roster: remoteEmp, registration: remoteReg });
+      if (remoteEmp) latestRosterMatch = remoteEmp;
+      existingReg = remoteReg;
+      if (remoteReg) setRemoteDuplicate(remoteReg);
+      setIsSubmitting(false);
+    }
+
     if (existingReg) {
       soundFX.playClick();
       const dupMsg = t(
@@ -137,7 +190,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
       return;
     }
 
-    const match = roster.find((emp) => emp.id.toUpperCase() === trimmedId) || matchedEmployee;
+    const match = latestRosterMatch;
 
     const newRegistration: AttendeeRegistration = {
       id: `REG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,

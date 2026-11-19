@@ -1,10 +1,9 @@
 import {
   collection,
   doc,
+  getCountFromServer,
   getDoc,
-  getDocFromServer,
   getDocs,
-  getDocsFromServer,
   limit,
   onSnapshot,
   query,
@@ -40,6 +39,7 @@ const COLLECTIONS = {
 
 const CONFIG_DOC_ID = 'main';
 const ACTIVE_REG_LOCAL_KEY = 'party_my_registration_id_v1';
+const ACTIVE_REG_DOC_LOCAL_KEY = 'party_my_registration_doc_v1';
 
 const CACHE_KEYS = {
   CONFIG: 'party_fs_cache_config_v1',
@@ -298,11 +298,84 @@ export const FirestoreService = {
     }
   },
 
+  getMyRegistrationCached(): AttendeeRegistration | null {
+    return readCache<AttendeeRegistration>(ACTIVE_REG_DOC_LOCAL_KEY);
+  },
+
+  setMyRegistrationCached(reg: AttendeeRegistration) {
+    writeCache(ACTIVE_REG_DOC_LOCAL_KEY, reg);
+  },
+
   clearMyRegistrationId() {
     try {
       localStorage.removeItem(ACTIVE_REG_LOCAL_KEY);
+      localStorage.removeItem(ACTIVE_REG_DOC_LOCAL_KEY);
     } catch {
       // ignore
+    }
+  },
+
+  async lookupRosterByEmployeeId(employeeId: string): Promise<EmployeeRoster | null> {
+    const trimmed = employeeId.trim().toUpperCase();
+    if (!trimmed) return null;
+    try {
+      const docId = toSafeDocId('', trimmed);
+      const snap = await getDoc(doc(db, COLLECTIONS.ROSTER, docId));
+      if (snap.exists()) {
+        return snap.data() as EmployeeRoster;
+      }
+      return null;
+    } catch (error) {
+      if (isOfflineOrNetworkError(error)) return null;
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.GET, `${COLLECTIONS.ROSTER}/${trimmed}`);
+      }
+      return null;
+    }
+  },
+
+  async lookupRegistrationByEmployeeId(employeeId: string): Promise<AttendeeRegistration | null> {
+    const trimmed = employeeId.trim().toUpperCase();
+    if (!trimmed) return null;
+    try {
+      const docId = toSafeDocId('REG_', trimmed);
+      const snap = await getDoc(doc(db, COLLECTIONS.REGISTRATIONS, docId));
+      if (snap.exists()) {
+        return snap.data() as AttendeeRegistration;
+      }
+      return null;
+    } catch (error) {
+      if (isOfflineOrNetworkError(error)) return null;
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.GET, `${COLLECTIONS.REGISTRATIONS}/REG_${trimmed}`);
+      }
+      return null;
+    }
+  },
+
+  async fetchMyRegistrationById(docId: string): Promise<AttendeeRegistration | null> {
+    const safeId = docId.trim();
+    if (!safeId) return null;
+    try {
+      const snap = await getDoc(doc(db, COLLECTIONS.REGISTRATIONS, safeId));
+      if (snap.exists()) {
+        const reg = snap.data() as AttendeeRegistration;
+        this.setMyRegistrationCached(reg);
+        return reg;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  async fetchRosterCount(): Promise<number | null> {
+    try {
+      const snap = await getCountFromServer(collection(db, COLLECTIONS.ROSTER));
+      const count = snap.data().count;
+      return Number.isFinite(count) && count > 0 ? count : null;
+    } catch {
+      return null;
     }
   },
 
@@ -423,6 +496,7 @@ export const FirestoreService = {
 
   subscribeConfig(onData: (config: PartyConfig) => void): Unsubscribe {
     const ref = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
+    let lastSignature = '';
     return onSnapshot(
       ref,
       (snap) => {
@@ -433,9 +507,15 @@ export const FirestoreService = {
             ...raw,
             blockedGroups: Array.isArray(raw.blockedGroups) ? raw.blockedGroups : [],
           };
+          const sig = JSON.stringify(merged);
+          if (sig === lastSignature) return;
+          lastSignature = sig;
           writeCache(CACHE_KEYS.CONFIG, merged);
           onData(merged);
         } else if (!snap.metadata.fromCache) {
+          const sig = JSON.stringify(DEFAULT_PARTY_CONFIG);
+          if (sig === lastSignature) return;
+          lastSignature = sig;
           onData(DEFAULT_PARTY_CONFIG);
         }
       },
@@ -453,12 +533,17 @@ export const FirestoreService = {
   },
 
   subscribeRoster(onData: (roster: EmployeeRoster[]) => void): Unsubscribe {
+    let hasInitial = false;
     return onSnapshot(
       collection(db, COLLECTIONS.ROSTER),
       (snap) => {
         if (snap.empty && snap.metadata.fromCache) {
           return;
         }
+        if (hasInitial && snap.docChanges().length === 0) {
+          return;
+        }
+        hasInitial = true;
         const list = snap.docs
           .map((d) => d.data() as EmployeeRoster)
           .sort((a, b) => a.id.localeCompare(b.id));
@@ -484,12 +569,17 @@ export const FirestoreService = {
   },
 
   subscribePrizes(onData: (prizes: Prize[]) => void): Unsubscribe {
+    let hasInitial = false;
     return onSnapshot(
       collection(db, COLLECTIONS.PRIZES),
       (snap) => {
         if (snap.empty && snap.metadata.fromCache) {
           return;
         }
+        if (hasInitial && snap.docChanges().length === 0) {
+          return;
+        }
+        hasInitial = true;
         const list = snap.docs
           .map((d) => d.data() as Prize & { sortOrder?: number })
           .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
@@ -515,12 +605,17 @@ export const FirestoreService = {
   },
 
   subscribeRegistrations(onData: (registrations: AttendeeRegistration[]) => void): Unsubscribe {
+    let hasInitial = false;
     return onSnapshot(
       collection(db, COLLECTIONS.REGISTRATIONS),
       (snap) => {
         if (snap.empty && snap.metadata.fromCache) {
           return;
         }
+        if (hasInitial && snap.docChanges().length === 0) {
+          return;
+        }
+        hasInitial = true;
         const list = snap.docs
           .map((d) => d.data() as AttendeeRegistration)
           .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
@@ -541,12 +636,17 @@ export const FirestoreService = {
   },
 
   subscribeLuckyWinners(onData: (winners: LuckyDrawRecord[]) => void): Unsubscribe {
+    let hasInitial = false;
     return onSnapshot(
       collection(db, COLLECTIONS.LUCKY_WINNERS),
       (snap) => {
         if (snap.empty && snap.metadata.fromCache) {
           return;
         }
+        if (hasInitial && snap.docChanges().length === 0) {
+          return;
+        }
+        hasInitial = true;
         const list = snap.docs
           .map((d) => d.data() as LuckyDrawRecord)
           .sort((a, b) => b.round - a.round || b.wonAt.localeCompare(a.wonAt));
@@ -564,74 +664,6 @@ export const FirestoreService = {
         console.warn('Winners listener warning:', error);
       }
     );
-  },
-
-  async refreshConfigFromServer(): Promise<PartyConfig | null> {
-    try {
-      const ref = doc(db, COLLECTIONS.CONFIG, CONFIG_DOC_ID);
-      let snap;
-      try {
-        snap = await getDocFromServer(ref);
-      } catch {
-        snap = await getDoc(ref);
-      }
-      if (snap.exists()) {
-        const raw = snap.data() as PartyConfig;
-        const merged: PartyConfig = {
-          ...DEFAULT_PARTY_CONFIG,
-          ...raw,
-          blockedGroups: Array.isArray(raw.blockedGroups) ? raw.blockedGroups : [],
-        };
-        writeCache(CACHE_KEYS.CONFIG, merged);
-        return merged;
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  },
-
-  async refreshLiveCollectionsFromServer(): Promise<{
-    prizes?: Prize[];
-    registrations?: AttendeeRegistration[];
-    luckyWinners?: LuckyDrawRecord[];
-  }> {
-    const result: {
-      prizes?: Prize[];
-      registrations?: AttendeeRegistration[];
-      luckyWinners?: LuckyDrawRecord[];
-    } = {};
-
-    try {
-      const [prizeSnap, regSnap, winnerSnap] = await Promise.all([
-        getDocsFromServer(collection(db, COLLECTIONS.PRIZES)),
-        getDocsFromServer(collection(db, COLLECTIONS.REGISTRATIONS)),
-        getDocsFromServer(collection(db, COLLECTIONS.LUCKY_WINNERS)),
-      ]);
-
-      const prizesList = prizeSnap.docs
-        .map((d) => d.data() as Prize & { sortOrder?: number })
-        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
-      if (prizesList.length > 0) {
-        writeCache(CACHE_KEYS.PRIZES, prizesList);
-        result.prizes = prizesList;
-      }
-
-      const regsList = regSnap.docs
-        .map((d) => d.data() as AttendeeRegistration)
-        .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
-      writeCache(CACHE_KEYS.REGISTRATIONS, regsList);
-      result.registrations = regsList;
-
-      const winnersList = winnerSnap.docs
-        .map((d) => d.data() as LuckyDrawRecord)
-        .sort((a, b) => b.round - a.round || b.wonAt.localeCompare(a.wonAt));
-      writeCache(CACHE_KEYS.LUCKY_WINNERS, winnersList);
-      result.luckyWinners = winnersList;
-    } catch {
-      // Ignore silent background sync errors when offline
-    }
-    return result;
   },
 
   async setConfig(config: PartyConfig): Promise<void> {
@@ -703,6 +735,7 @@ export const FirestoreService = {
     const path = `${COLLECTIONS.REGISTRATIONS}/${docId}`;
 
     this.setMyRegistrationId(docId);
+    this.setMyRegistrationCached(saved);
     const cached = this.getCachedRegistrations().filter((r) => r.id !== docId);
     writeCache(CACHE_KEYS.REGISTRATIONS, [saved, ...cached]);
     emitLocalSync('registrations');

@@ -21,7 +21,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#120627]/95 backdrop-blur-xl border-t-2 border-fuchsia-300/60 dark:border-fuchsia-500/35 pb-safe shadow-2xl transition-colors">
-      <div className={`grid ${isAdminLoggedIn ? 'grid-cols-4' : 'grid-cols-3'} items-center h-14 px-1`}>
+      <div className={`grid ${isAdminLoggedIn ? 'grid-cols-4' : 'grid-cols-2'} items-center h-14 px-1`}>
         {/* Tab 1: Register */}
         <button
           type="button"
@@ -64,22 +64,24 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           </span>
         </button>
 
-        {/* Tab 3: LIVE */}
-        <button
-          type="button"
-          onClick={() => {
-            soundFX.playClick();
-            onChangeView('livedraw');
-          }}
-          className={`flex flex-col items-center justify-center min-h-[44px] transition relative cursor-pointer ${
-            currentView === 'livedraw'
-              ? 'text-amber-600 dark:text-amber-300 font-bold'
-              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-          }`}
-        >
-          <Trophy className="w-5 h-5" />
-          <span className="text-[10px] font-bold tracking-wider mt-0.5 leading-none">LIVE</span>
-        </button>
+        {/* Tab 3: LIVE (Admin only to prevent exhausting Firebase free quota) */}
+        {isAdminLoggedIn && (
+          <button
+            type="button"
+            onClick={() => {
+              soundFX.playClick();
+              onChangeView('livedraw');
+            }}
+            className={`flex flex-col items-center justify-center min-h-[44px] transition relative cursor-pointer ${
+              currentView === 'livedraw'
+                ? 'text-amber-600 dark:text-amber-300 font-bold'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+            }`}
+          >
+            <Trophy className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-wider mt-0.5 leading-none">LIVE</span>
+          </button>
+        )}
 
         {/* Tab 4: Admin (Only visible when Admin is logged in) */}
         {isAdminLoggedIn && (

@@ -286,7 +286,7 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
     const updateTimer = () => {
       const diffMs = endMs - Date.now();
       const secs = Math.max(0, Math.ceil(diffMs / 1000));
-      setCountdownSeconds(secs);
+      setCountdownSeconds((prev) => (prev === secs ? prev : secs));
 
       if (secs > 0 && secs <= 10 && lastTickSecRef.current !== secs && !isAnimatingDraw) {
         lastTickSecRef.current = secs;
@@ -297,7 +297,7 @@ export const LiveDrawFeed: React.FC<LiveDrawFeedProps> = ({
     };
 
     updateTimer();
-    const interval = setInterval(updateTimer, 200);
+    const interval = setInterval(updateTimer, 500);
     return () => clearInterval(interval);
   }, [config.claimCountdownEndAt, isAnimatingDraw]);
 

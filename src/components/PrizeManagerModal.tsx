@@ -66,7 +66,7 @@ export const PrizeManagerModal: React.FC<PrizeManagerModalProps> = ({
       const reader = new FileReader();
       reader.onload = async (event) => {
         if (event.target?.result) {
-          const compressed = await compressImageDataUrl(event.target.result as string, 640, 640, 0.75);
+          const compressed = await compressImageDataUrl(event.target.result as string, 480, 480, 0.72, 120000);
           setImageUrl(compressed);
           setImagePreview(compressed);
           soundFX.playClick();

@@ -76,21 +76,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              soundFX.playClick();
-              onChangeView('livedraw');
-            }}
-            className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 border-b-2 ${
-              currentView === 'livedraw'
-                ? 'text-amber-600 dark:text-amber-300 border-amber-500 dark:border-amber-400 font-bold'
-                : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
-            }`}
-          >
-            <Trophy className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-            <span>LIVE</span>
-          </button>
+          {isAdminLoggedIn && (
+            <button
+              type="button"
+              onClick={() => {
+                soundFX.playClick();
+                onChangeView('livedraw');
+              }}
+              className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                currentView === 'livedraw'
+                  ? 'text-amber-600 dark:text-amber-300 border-amber-500 dark:border-amber-400 font-bold'
+                  : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
+              }`}
+            >
+              <Trophy className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+              <span>LIVE</span>
+            </button>
+          )}
         </nav>
 
         {/* Zone 3: Theme Toggle + Language Switcher + Admin Toggle */}
