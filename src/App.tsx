@@ -79,7 +79,15 @@ export default function App() {
     return sessionStorage.getItem('admin_session_auth') === 'true';
   });
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
-  const [isCheckinFullscreen, setIsCheckinFullscreen] = useState(false);
+  const [isCheckinFullscreen, setIsCheckinFullscreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const searchParams = new URLSearchParams(window.location.search);
+    return (
+      searchParams.get('checkin') === '1' ||
+      searchParams.get('checkin') === 'true' ||
+      window.location.hash === '#checkin'
+    );
+  });
   const isVipDrawingRef = useRef(false);
 
   useEffect(() => {
@@ -87,6 +95,87 @@ export default function App() {
       setIsCheckinFullscreen(false);
     }
   }, [currentView, isCheckinFullscreen]);
+
+  // Automatic full-screen experience across all devices (Desktop, Android, Tablet, TV, iOS)
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    // On mobile browsers (including iOS Safari), collapse URL bar where supported
+    const scrollTimer = window.setTimeout(() => {
+      if (window.scrollY === 0 && window.innerWidth <= 1024) {
+        window.scrollTo(0, 1);
+      }
+    }, 120);
+
+    // Only auto-trigger native browser Fullscreen API when running top-level (not embedded preview iframe)
+    let isEmbedded = false;
+    try {
+      isEmbedded = window.self !== window.top;
+    } catch {
+      isEmbedded = true;
+    }
+    if (isEmbedded) {
+      return () => window.clearTimeout(scrollTimer);
+    }
+
+    const docEl = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => Promise<void> | void;
+      msRequestFullscreen?: () => Promise<void> | void;
+    };
+    const requestFs =
+      docEl.requestFullscreen?.bind(docEl) ||
+      docEl.webkitRequestFullscreen?.bind(docEl) ||
+      docEl.msRequestFullscreen?.bind(docEl);
+
+    if (!requestFs) {
+      return () => window.clearTimeout(scrollTimer);
+    }
+
+    let attempted = false;
+    const tryEnterFullscreen = (e?: Event) => {
+      if (attempted || document.fullscreenElement) return;
+      // Avoid interrupting text input focus or native camera/gallery file pickers
+      const target = e?.target as HTMLElement | null;
+      if (target && target.closest('input, textarea, select, label')) {
+        return;
+      }
+      attempted = true;
+      try {
+        const result = requestFs();
+        if (result && typeof (result as Promise<void>).catch === 'function') {
+          (result as Promise<void>).catch(() => {});
+        }
+      } catch {
+        // Ignore browser gesture restriction errors
+      }
+      window.removeEventListener('pointerdown', tryEnterFullscreen, true);
+      window.removeEventListener('click', tryEnterFullscreen, true);
+    };
+
+    // Attempt immediately (works in kiosk/installed web apps) & fall back to first gesture
+    try {
+      const immediate = requestFs();
+      if (immediate && typeof (immediate as Promise<void>).then === 'function') {
+        (immediate as Promise<void>)
+          .then(() => {
+            attempted = true;
+          })
+          .catch(() => {
+            window.addEventListener('pointerdown', tryEnterFullscreen, true);
+            window.addEventListener('click', tryEnterFullscreen, true);
+          });
+      }
+    } catch {
+      window.addEventListener('pointerdown', tryEnterFullscreen, true);
+      window.addEventListener('click', tryEnterFullscreen, true);
+    }
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.removeEventListener('pointerdown', tryEnterFullscreen, true);
+      window.removeEventListener('click', tryEnterFullscreen, true);
+    };
+  }, []);
 
   // Keep personal pass synced with cached/live registrations without extra reads
   useEffect(() => {
@@ -534,8 +623,8 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-rose-50 via-amber-50/70 to-cyan-50 dark:bg-none dark:bg-[#0b041c] text-slate-900 dark:text-white flex flex-col relative selection:bg-fuchsia-500 selection:text-white overflow-x-hidden transition-colors ${
-        hideNavigationChrome ? 'pb-0' : 'pb-16 md:pb-0'
+      className={`min-h-[100dvh] w-full bg-gradient-to-br from-rose-50 via-amber-50/70 to-cyan-50 dark:bg-none dark:bg-[#0b041c] text-slate-900 dark:text-white flex flex-col relative selection:bg-fuchsia-500 selection:text-white overflow-x-hidden transition-colors ${
+        hideNavigationChrome ? 'pb-0 pt-safe' : 'pb-16 md:pb-0'
       }`}
     >
       {/* Vibrant Multi-Color Ambient Party Accents */}

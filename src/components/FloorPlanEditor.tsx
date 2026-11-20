@@ -9,6 +9,8 @@ import {
   Loader2,
   Plus,
   RotateCcw,
+  ScanSearch,
+  AlertCircle,
 } from 'lucide-react';
 import { EmployeeRoster, FloorPlanData, PartyConfig, TableMarker } from '../types/party';
 import { FirestoreService } from '../services/firestoreService';
@@ -37,6 +39,8 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
   const [customTableInput, setCustomTableInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isDetecting, setIsDetecting] = useState<boolean>(false);
+  const [unmatchedTables, setUnmatchedTables] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Extract unique sorted table numbers from Excel roster
@@ -99,6 +103,104 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
     }
   }, [allKnownTables, selectedTable, pinnedSet]);
 
+  const runAutoDetectTables = async (targetImageUrl: string, autoSaveAfterDetect: boolean) => {
+    if (!targetImageUrl || isDetecting) return;
+    setIsDetecting(true);
+    setNotice(null);
+    setUnmatchedTables([]);
+
+    try {
+      const response = await fetch('/api/floor-plan/detect-tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageDataUrl: targetImageUrl,
+          rosterTables,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            t(
+              'ไม่สามารถสแกนอ่านตัวอักษรและตัวเลขบนรูปผังโต๊ะได้ในขณะนี้',
+              'Could not scan table numbers from the floor plan image right now.'
+            )
+        );
+      }
+
+      const detectedMarkers: TableMarker[] = Array.isArray(data?.markers)
+        ? data.markers
+            .filter(
+              (m: { tableNumber?: unknown; x?: unknown; y?: unknown }) =>
+                typeof m?.tableNumber === 'string' &&
+                m.tableNumber.trim().length > 0 &&
+                Number.isFinite(Number(m.x)) &&
+                Number.isFinite(Number(m.y))
+            )
+            .map((m: { tableNumber: string; x: number; y: number }) => ({
+              tableNumber: m.tableNumber.trim(),
+              x: Math.min(99, Math.max(1, Number(Number(m.x).toFixed(2)))),
+              y: Math.min(99, Math.max(1, Number(Number(m.y).toFixed(2)))),
+            }))
+        : [];
+
+      const missing: string[] = Array.isArray(data?.unmatchedTables) ? data.unmatchedTables : [];
+      setUnmatchedTables(missing);
+
+      if (detectedMarkers.length === 0) {
+        setNotice({
+          type: 'error',
+          text: t(
+            'ไม่พบหมายเลขโต๊ะที่ชัดเจนบนรูปภาพนี้ กรุณาตรวจสอบความคมชัดของรูป หรือคลิกปักหมุดตำแหน่งโต๊ะด้วยตนเองด้านล่าง',
+            'No clear table labels were detected on this image. Please check image sharpness or click the map below to pin tables manually.'
+          ),
+        });
+        return;
+      }
+
+      setMarkers(detectedMarkers);
+      if (missing.length > 0) {
+        setSelectedTable(missing[0]);
+      }
+
+      if (autoSaveAfterDetect) {
+        const payload: FloorPlanData = {
+          imageUrl: targetImageUrl,
+          markers: detectedMarkers,
+          updatedAt: new Date().toISOString(),
+        };
+        await FirestoreService.saveFloorPlan(payload);
+        if (!config.hasFloorPlan) {
+          await onUpdateConfig({ ...config, hasFloorPlan: true });
+        }
+      }
+
+      soundFX.playCelebrationChime();
+      const matchedSummary =
+        rosterTables.length > 0
+          ? t(
+              `อ่านตัวอักษรและตัวเลขบนรูปสำเร็จ! ปักหมุดอัตโนมัติ ${detectedMarkers.length} โต๊ะ (ตรงกับไฟล์ Excel ${data.matchedCount ?? detectedMarkers.length}/${rosterTables.length} โต๊ะ)${autoSaveAfterDetect ? ' และบันทึกเรียบร้อยแล้ว' : ''}`,
+              `Detected & pinned ${detectedMarkers.length} tables from image (${data.matchedCount ?? detectedMarkers.length}/${rosterTables.length} matched with Excel roster)${autoSaveAfterDetect ? ' and auto-saved.' : '.'}`
+            )
+          : t(
+              `อ่านตัวอักษรและตัวเลขบนรูปสำเร็จ! ปักหมุดอัตโนมัติ ${detectedMarkers.length} โต๊ะ${autoSaveAfterDetect ? ' และบันทึกเรียบร้อยแล้ว' : ''}`,
+              `Detected & pinned ${detectedMarkers.length} tables from image${autoSaveAfterDetect ? ' and auto-saved.' : '.'}`
+            );
+
+      setNotice({ type: 'success', text: matchedSummary });
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : t('เกิดข้อผิดพลาดระหว่างอ่านผังโต๊ะอัตโนมัติ', 'Error while scanning floor plan.');
+      setNotice({ type: 'error', text: msg });
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
   const handleUploadFloorPlanFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -112,11 +214,14 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
           ev.target.result as string,
           1280,
           960,
-          0.78,
+          0.8,
           360000
         );
         setImageUrl(compressed);
+        setMarkers([]);
         soundFX.playClick();
+        // Automatically read letters/numbers on image & cross-reference with imported Excel tables
+        await runAutoDetectTables(compressed, true);
       }
     };
     reader.readAsDataURL(file);
@@ -146,6 +251,9 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
       { tableNumber: activeTable, x, y },
     ];
     setMarkers(nextMarkers);
+    setUnmatchedTables((prev) =>
+      prev.filter((tbl) => tbl.trim().toUpperCase() !== activeTable.toUpperCase())
+    );
 
     if (customTableInput.trim()) {
       setCustomTableInput('');
@@ -244,7 +352,7 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <input
             ref={fileInputRef}
             type="file"
@@ -252,10 +360,33 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
             onChange={handleUploadFloorPlanFile}
             className="hidden"
           />
+          {imageUrl && (
+            <button
+              type="button"
+              disabled={isDetecting || isSaving}
+              onClick={() => {
+                soundFX.playClick();
+                runAutoDetectTables(imageUrl, true);
+              }}
+              className="min-h-[42px] px-4 py-2 rounded-xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 hover:brightness-110 disabled:opacity-60 text-white text-xs font-extrabold flex items-center gap-1.5 shadow cursor-pointer"
+            >
+              {isDetecting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <ScanSearch className="w-4 h-4" />
+              )}
+              <span>
+                {isDetecting
+                  ? t('กำลังอ่านเลขโต๊ะจากรูป...', 'Scanning table numbers...')
+                  : t('สแกนอ่านเลขโต๊ะอัตโนมัติ (อ้างอิง Excel)', 'Auto-Read Tables from Image')}
+              </span>
+            </button>
+          )}
           <button
             type="button"
+            disabled={isDetecting}
             onClick={() => fileInputRef.current?.click()}
-            className="min-h-[42px] px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:brightness-110 text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer"
+            className="min-h-[42px] px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:brightness-110 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer"
           >
             <Upload className="w-4 h-4" />
             <span>
@@ -267,6 +398,26 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
         </div>
       </div>
 
+      {isDetecting && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-fuchsia-500/15 via-amber-500/15 to-cyan-500/15 border border-fuchsia-400/50 text-fuchsia-800 dark:text-amber-200 text-xs font-bold flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-fuchsia-600 dark:text-amber-300 shrink-0" />
+          <div>
+            <div>
+              {t(
+                'ระบบกำลังอ่านตัวอักษรและตัวเลขบนรูปผังโต๊ะ พร้อมเทียบตำแหน่งกับเลขโต๊ะในไฟล์ Excel...',
+                'Reading table numbers/letters on the floor plan image and matching with your Excel roster...'
+              )}
+            </div>
+            <div className="text-[11px] font-medium opacity-80 mt-0.5">
+              {t(
+                `อ้างอิงรายชื่อโต๊ะจากไฟล์ Excel ทั้งหมด ${rosterTables.length} โต๊ะ`,
+                `Cross-referencing ${rosterTables.length} unique tables from imported Excel file`
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {notice && (
         <div
           className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
@@ -275,8 +426,46 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
               : 'bg-rose-500/15 border-rose-500/35 text-rose-700 dark:text-rose-300'
           }`}
         >
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          {notice.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          )}
           <span>{notice.text}</span>
+        </div>
+      )}
+
+      {unmatchedTables.length > 0 && !isDetecting && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-400/45 text-xs space-y-2">
+          <div className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>
+              {t(
+                `โต๊ะจากไฟล์ Excel ที่ยังไม่พบในรูป (${unmatchedTables.length} โต๊ะ) — คลิกชื่อโต๊ะแล้วแตะตำแหน่งบนแผนผังเพื่อปักเพิ่มได้:`,
+                `${unmatchedTables.length} Excel table(s) were not auto-detected — click a table below then tap the map to pin it:`
+              )}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {unmatchedTables.map((tbl) => (
+              <button
+                key={tbl}
+                type="button"
+                onClick={() => {
+                  soundFX.playClick();
+                  setSelectedTable(tbl);
+                  setCustomTableInput('');
+                }}
+                className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold border transition cursor-pointer ${
+                  selectedTable.toUpperCase() === tbl.toUpperCase()
+                    ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow'
+                    : 'bg-white dark:bg-zinc-900 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-500/40 hover:bg-amber-100 dark:hover:bg-amber-500/20'
+                }`}
+              >
+                {tbl}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -298,8 +487,8 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
           </div>
           <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
             {t(
-              'หลังอัปโหลดรูปแล้ว สามารถคลิกปักหมุดหมายเลขโต๊ะลงบนตำแหน่งต่างๆ ในแผนผังได้ทันที',
-              'Once uploaded, click directly on the floor plan to place table pins.'
+              'หลังอัปโหลดรูป ระบบจะอ่านตัวอักษรและตัวเลขบนรูปผังโต๊ะพร้อมจับคู่กับเลขโต๊ะจากไฟล์ Excel เพื่อปักหมุดให้อัตโนมัติ และสามารถคลิกปรับแก้เพิ่มเติมได้',
+              'After upload, the system automatically reads table labels on the image, matches them with your Excel roster, and places precise pins (editable by clicking).'
             )}
           </p>
         </div>
@@ -372,8 +561,8 @@ export const FloorPlanEditor: React.FC<FloorPlanEditorProps> = ({
 
           <p className="text-[11px] text-zinc-600 dark:text-zinc-300 font-medium">
             {t(
-              'วิธีใช้งาน: เลือกหมายเลขโต๊ะด้านบน แล้วคลิกตำแหน่งโต๊ะนั้นบนรูปแผนผังได้เลย (ระบบจะเลื่อนไปยังโต๊ะถัดไปให้อัตโนมัติ และคลิกที่หมุดเพื่อลบออกได้)',
-              'Tip: Choose a table above and click directly on the floor plan image to place its pin (auto-advances to the next table; click any pin to remove it).'
+              'วิธีใช้งาน: ระบบสแกนอ่านเลขโต๊ะจากรูปและปักหมุดให้ตรงกับไฟล์ Excel อัตโนมัติ หากต้องการปรับตำแหน่ง สามารถเลือกหมายเลขโต๊ะด้านบนแล้วคลิกตำแหน่งใหม่บนรูปได้เลย (คลิกที่หมุดเพื่อลบออก)',
+              'Tip: Table pins are auto-detected from the image and matched with your Excel roster. To fine-tune any pin, select the table above and click its new position on the map (click any pin to remove).'
             )}
           </p>
 

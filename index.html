@@ -2,7 +2,11 @@
 <html lang="th" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0b041c" id="app-theme-color" />
     <title>PartyPass & Lucky Draw - ระบบลงทะเบียนงานเลี้ยง & สุ่มจับรางวัล</title>
     <meta name="description" content="ระบบลงทะเบียนเข้างานเลี้ยง อัปโหลดรูปภาพ ตรวจสอบหมายเลขโต๊ะ แดชบอร์ดแอดมิน นำเข้า/ส่งออก Excel และสุ่มจับรางวัล Lucky Draw แบบเรียลไทม์" />
     <meta property="og:title" content="PartyPass & Lucky Draw - ระบบลงทะเบียนงานเลี้ยง & สุ่มจับรางวัล" />
@@ -17,12 +21,15 @@
         try {
           var savedTheme = localStorage.getItem('party_theme_v1');
           var root = document.documentElement;
+          var themeMeta = document.getElementById('app-theme-color');
           if (savedTheme === 'light') {
             root.classList.remove('dark');
             root.style.colorScheme = 'light';
+            if (themeMeta) themeMeta.setAttribute('content', '#fff1f2');
           } else {
             root.classList.add('dark');
             root.style.colorScheme = 'dark';
+            if (themeMeta) themeMeta.setAttribute('content', '#0b041c');
           }
           var savedLang = localStorage.getItem('party_lang_v1');
           if (savedLang === 'en' || savedLang === 'th') {
@@ -32,8 +39,8 @@
       })();
     </script>
   </head>
-  <body class="bg-gradient-to-br from-rose-50 via-amber-50 to-cyan-50 dark:bg-none dark:bg-[#0b041c] text-zinc-900 dark:text-zinc-100 antialiased selection:bg-fuchsia-500 selection:text-white min-h-screen transition-colors duration-200">
-    <div id="root"></div>
+  <body class="bg-gradient-to-br from-rose-50 via-amber-50 to-cyan-50 dark:bg-none dark:bg-[#0b041c] text-zinc-900 dark:text-zinc-100 antialiased selection:bg-fuchsia-500 selection:text-white min-h-[100dvh] w-full transition-colors duration-200">
+    <div id="root" class="min-h-[100dvh] w-full"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

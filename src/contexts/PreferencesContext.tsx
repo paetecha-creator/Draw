@@ -43,6 +43,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ c
       root.classList.remove('dark');
     }
     root.style.colorScheme = theme;
+    const themeMeta = document.getElementById('app-theme-color');
+    if (themeMeta) {
+      themeMeta.setAttribute('content', theme === 'dark' ? '#0b041c' : '#fff1f2');
+    }
     try {
       localStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch {

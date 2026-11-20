@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, X, ZoomIn, ZoomOut, Loader2, Map as MapIcon, AlertCircle } from 'lucide-react';
 import { FloorPlanData, TableMarker } from '../types/party';
 import { FirestoreService } from '../services/firestoreService';
@@ -17,8 +18,10 @@ function normalizeTableKey(raw: string): string {
   return raw
     .trim()
     .toUpperCase()
-    .replace(/^(โต๊ะที่|โต๊ะ|TABLE|NO\.?|#)\s*/i, '')
-    .replace(/[\s\-_]+/g, '');
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/^(โต๊ะที่|โต๊ะ|TABLE|TBL|NO\.?|#)\s*/i, '')
+    .replace(/[\s\-_]+/g, '')
+    .replace(/^([A-Z]*)0+(\d+)$/, '$1$2');
 }
 
 function findMatchingMarker(markers: TableMarker[], tableNumber: string): TableMarker | null {
@@ -29,14 +32,26 @@ function findMatchingMarker(markers: TableMarker[], tableNumber: string): TableM
 
   const normalizedTarget = normalizeTableKey(tableNumber);
   if (!normalizedTarget) return null;
+
+  const exactNorm = markers.find((m) => normalizeTableKey(m.tableNumber) === normalizedTarget);
+  if (exactNorm) return exactNorm;
+
+  // Avoid false substring matches on single digits (e.g., "1" matching "10")
+  if (/^\d+$/.test(normalizedTarget)) {
+    return (
+      markers.find((m) => {
+        const digits = normalizeTableKey(m.tableNumber).replace(/^[A-Z]+/, '');
+        return digits === normalizedTarget;
+      }) || null
+    );
+  }
+
   return (
-    markers.find((m) => normalizeTableKey(m.tableNumber) === normalizedTarget) ||
     markers.find(
       (m) =>
         normalizeTableKey(m.tableNumber).includes(normalizedTarget) ||
         normalizedTarget.includes(normalizeTableKey(m.tableNumber))
-    ) ||
-    null
+    ) || null
   );
 }
 
@@ -81,11 +96,11 @@ export const TableFloorPlanModal: React.FC<TableFloorPlanModalProps> = ({
     return findMatchingMarker(floorPlan.markers, tableNumber);
   }, [floorPlan, tableNumber]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4"
+      className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -209,24 +224,24 @@ export const TableFloorPlanModal: React.FC<TableFloorPlanModalProps> = ({
                 );
               })}
 
-              {/* Highlighted Attendee Table Pin */}
+              {/* Highlighted Attendee Table Pin — anchored dead-center on exact table coordinates */}
               {matchedMarker && (
                 <div
                   style={{ left: `${matchedMarker.x}%`, top: `${matchedMarker.y}%` }}
                   className="absolute -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none"
                 >
-                  {/* Expanding radar pulse rings */}
+                  {/* Expanding radar pulse rings centered on the exact table */}
                   <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-rose-500/45 animate-ping" />
-                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-400/50 animate-pulse" />
+                  <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-400/55 animate-pulse" />
 
-                  {/* Floating Pin + Table Callout */}
-                  <div className="relative flex flex-col items-center -translate-y-4">
-                    <div className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-rose-600 via-fuchsia-600 to-amber-500 text-white text-[11px] sm:text-xs font-black whitespace-nowrap shadow-xl border-2 border-white mb-1 animate-bounce">
-                      {t('โต๊ะของคุณ', 'YOUR TABLE')}: {matchedMarker.tableNumber}
-                    </div>
-                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-rose-600 border-3 border-white text-white flex items-center justify-center shadow-2xl">
-                      <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </div>
+                  {/* Floating Table Callout directly above the exact center dot */}
+                  <div className="absolute left-1/2 bottom-full -translate-x-1/2 mb-2 px-2.5 py-1 rounded-xl bg-gradient-to-r from-rose-600 via-fuchsia-600 to-amber-500 text-white text-[11px] sm:text-xs font-black whitespace-nowrap shadow-xl border-2 border-white animate-bounce">
+                    {t('โต๊ะของคุณ', 'YOUR TABLE')}: {tableNumber}
+                  </div>
+
+                  {/* Center pin icon sitting right on the table */}
+                  <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-rose-600 border-3 border-white text-white flex items-center justify-center shadow-2xl">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                 </div>
               )}
@@ -249,6 +264,7 @@ export const TableFloorPlanModal: React.FC<TableFloorPlanModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

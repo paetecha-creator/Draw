@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Camera,
   ImagePlus,
@@ -312,120 +313,126 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({
         </div>
       )}
 
-      {/* Source Chooser Modal: Instant Selfie Camera OR Phone Photo Library */}
-      {showSourceChooser && (
-        <div
-          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-4"
-          onClick={() => setShowSourceChooser(false)}
-        >
+      {/* Source Chooser Modal: Centered in viewport & portaled above all nav bars */}
+      {showSourceChooser &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#160b30] border-2 border-fuchsia-300/70 dark:border-fuchsia-500/40 shadow-2xl overflow-hidden"
+            className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowSourceChooser(false)}
           >
-            <div className="h-1.5 bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400" />
-            <div className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-base font-extrabold text-zinc-900 dark:text-white">
-                  {t('เลือกวิธีแนบรูปภาพเซลฟี่', 'Choose Photo Method')}
-                </h4>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#160b30] border-2 border-fuchsia-300/70 dark:border-fuchsia-500/40 shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-150"
+            >
+              <div className="h-1.5 bg-gradient-to-r from-fuchsia-500 via-amber-400 to-cyan-400" />
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-base font-extrabold text-zinc-900 dark:text-white">
+                    {t('เลือกวิธีแนบรูปภาพเซลฟี่', 'Choose Photo Method')}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowSourceChooser(false)}
+                    className="p-1.5 rounded-xl bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/20 cursor-pointer"
+                    aria-label={t('ปิด', 'Close')}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleLaunchSelfieCamera}
+                    className="w-full min-h-[56px] px-4 py-3.5 rounded-2xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 hover:brightness-110 text-white font-extrabold text-sm shadow-lg shadow-fuchsia-500/25 flex items-center gap-3 active:scale-[0.98] transition cursor-pointer"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                      <div>{t('เปิดกล้องถ่ายภาพเซลฟี่ทันที', 'Open Selfie Camera Now')}</div>
+                      <div className="text-[11px] font-medium text-white/85">
+                        {t('เปิดกล้องหน้าเพื่อถ่ายรูปได้ทันที', 'Snap a selfie directly with your camera')}
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleChooseFromGallery}
+                    className="w-full min-h-[56px] px-4 py-3.5 rounded-2xl bg-cyan-50 dark:bg-violet-950/80 hover:bg-cyan-100 dark:hover:bg-violet-900 border-2 border-cyan-300/80 dark:border-cyan-500/40 text-zinc-900 dark:text-white font-extrabold text-sm flex items-center gap-3 active:scale-[0.98] transition cursor-pointer"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center shrink-0 shadow">
+                      <ImagePlus className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                      <div>{t('เลือกอัปโหลดรูปจากมือถือ / แกลเลอรี', 'Upload from Phone / Gallery')}</div>
+                      <div className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                        {t('เลือกรูปภาพที่มีอยู่ในเครื่องของคุณ', 'Select an existing photo from your device')}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Live Desktop/Browser Selfie Camera Modal */}
+      {showLiveCamera &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm rounded-3xl bg-zinc-950 border-2 border-fuchsia-500/60 shadow-2xl overflow-hidden">
+              <div className="px-4 py-3 flex items-center justify-between border-b border-white/10">
+                <div className="flex items-center gap-2 text-white text-sm font-extrabold">
+                  <Camera className="w-4 h-4 text-amber-400" />
+                  <span>{t('ถ่ายภาพเซลฟี่', 'Take a Selfie')}</span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowSourceChooser(false)}
-                  className="p-1.5 rounded-xl bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/20 cursor-pointer"
-                  aria-label={t('ปิด', 'Close')}
+                  onClick={() => {
+                    stopCameraStream();
+                    setShowLiveCamera(false);
+                  }}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={handleLaunchSelfieCamera}
-                  className="w-full min-h-[56px] px-4 py-3.5 rounded-2xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 hover:brightness-110 text-white font-extrabold text-sm shadow-lg shadow-fuchsia-500/25 flex items-center gap-3 active:scale-[0.98] transition cursor-pointer"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                    <Camera className="w-5 h-5" />
+              <div className="relative aspect-[4/5] w-full bg-black overflow-hidden">
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+                {!isCameraReady && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/80 text-xs">
+                    <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
+                    <span>{t('กำลังเปิดกล้องหน้า...', 'Starting front camera...')}</span>
                   </div>
-                  <div className="text-left">
-                    <div>{t('เปิดกล้องถ่ายภาพเซลฟี่ทันที', 'Open Selfie Camera Now')}</div>
-                    <div className="text-[11px] font-medium text-white/85">
-                      {t('เปิดกล้องหน้าเพื่อถ่ายรูปได้ทันที', 'Snap a selfie directly with your camera')}
-                    </div>
-                  </div>
-                </button>
+                )}
+              </div>
 
+              <div className="p-4 flex items-center justify-center gap-3 bg-zinc-950">
                 <button
                   type="button"
-                  onClick={handleChooseFromGallery}
-                  className="w-full min-h-[56px] px-4 py-3.5 rounded-2xl bg-cyan-50 dark:bg-violet-950/80 hover:bg-cyan-100 dark:hover:bg-violet-900 border-2 border-cyan-300/80 dark:border-cyan-500/40 text-zinc-900 dark:text-white font-extrabold text-sm flex items-center gap-3 active:scale-[0.98] transition cursor-pointer"
+                  disabled={!isCameraReady}
+                  onClick={handleSnapLiveSelfie}
+                  className="w-full min-h-[50px] py-3 px-5 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-rose-500 to-amber-400 hover:brightness-110 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center shrink-0 shadow">
-                    <ImagePlus className="w-5 h-5" />
-                  </div>
-                  <div className="text-left">
-                    <div>{t('เลือกอัปโหลดรูปจากมือถือ / แกลเลอรี', 'Upload from Phone / Gallery')}</div>
-                    <div className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
-                      {t('เลือกรูปภาพที่มีอยู่ในเครื่องของคุณ', 'Select an existing photo from your device')}
-                    </div>
-                  </div>
+                  <Camera className="w-5 h-5" />
+                  <span>{t('ถ่ายภาพเลย!', 'Capture Selfie')}</span>
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Live Desktop/Browser Selfie Camera Modal */}
-      {showLiveCamera && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-3xl bg-zinc-950 border-2 border-fuchsia-500/60 shadow-2xl overflow-hidden">
-            <div className="px-4 py-3 flex items-center justify-between border-b border-white/10">
-              <div className="flex items-center gap-2 text-white text-sm font-extrabold">
-                <Camera className="w-4 h-4 text-amber-400" />
-                <span>{t('ถ่ายภาพเซลฟี่', 'Take a Selfie')}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  stopCameraStream();
-                  setShowLiveCamera(false);
-                }}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="relative aspect-[4/5] w-full bg-black overflow-hidden">
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                className="w-full h-full object-cover -scale-x-100"
-              />
-              {!isCameraReady && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/80 text-xs">
-                  <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
-                  <span>{t('กำลังเปิดกล้องหน้า...', 'Starting front camera...')}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 flex items-center justify-center gap-3 bg-zinc-950">
-              <button
-                type="button"
-                disabled={!isCameraReady}
-                onClick={handleSnapLiveSelfie}
-                className="w-full min-h-[50px] py-3 px-5 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-rose-500 to-amber-400 hover:brightness-110 disabled:opacity-50 text-white font-extrabold text-sm shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
-              >
-                <Camera className="w-5 h-5" />
-                <span>{t('ถ่ายภาพเลย!', 'Capture Selfie')}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

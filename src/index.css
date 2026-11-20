@@ -10,6 +10,22 @@
   .dark {
     color-scheme: dark;
   }
+
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+    width: 100%;
+    overscroll-behavior-y: none;
+  }
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Vibrant Dual-Theme Scrollbar */
