@@ -21,6 +21,7 @@ import { TicketPass } from './components/TicketPass';
 import { LiveDrawFeed } from './components/LiveDrawFeed';
 import { AdminDashboard } from './components/AdminDashboard';
 import { VipDrawScreen } from './components/VipDrawScreen';
+import { CheckinDisplayScreen } from './components/CheckinDisplayScreen';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { soundFX } from './utils/audio';
 import { usePreferences } from './contexts/PreferencesContext';
@@ -45,8 +46,8 @@ export default function App() {
     throw asyncError;
   }
 
-  // Navigation View State (Supports direct ?vip=1 / #vip for Executive remote & ?live=1 / #live for Stage Projector)
-  const [currentView, setCurrentView] = useState<'register' | 'ticket' | 'livedraw' | 'admin' | 'vip'>(() => {
+  // Navigation View State (Supports ?vip=1/#vip, ?live=1/#live, and ?checkin=1/#checkin for Entrance Display)
+  const [currentView, setCurrentView] = useState<'register' | 'ticket' | 'livedraw' | 'admin' | 'vip' | 'checkin'>(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       if (searchParams.get('vip') === '1' || searchParams.get('vip') === 'true' || window.location.hash === '#vip') {
@@ -54,6 +55,9 @@ export default function App() {
       }
       if (searchParams.get('live') === '1' || searchParams.get('live') === 'true' || window.location.hash === '#live') {
         return 'livedraw';
+      }
+      if (searchParams.get('checkin') === '1' || searchParams.get('checkin') === 'true' || window.location.hash === '#checkin') {
+        return 'checkin';
       }
     }
     return 'register';
@@ -75,7 +79,14 @@ export default function App() {
     return sessionStorage.getItem('admin_session_auth') === 'true';
   });
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+  const [isCheckinFullscreen, setIsCheckinFullscreen] = useState(false);
   const isVipDrawingRef = useRef(false);
+
+  useEffect(() => {
+    if (currentView !== 'checkin' && isCheckinFullscreen) {
+      setIsCheckinFullscreen(false);
+    }
+  }, [currentView, isCheckinFullscreen]);
 
   // Keep personal pass synced with cached/live registrations without extra reads
   useEffect(() => {
@@ -519,8 +530,14 @@ export default function App() {
     setCurrentView(myRegistration ? 'ticket' : 'register');
   };
 
+  const hideNavigationChrome = currentView === 'checkin' && isCheckinFullscreen;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-amber-50/70 to-cyan-50 dark:bg-none dark:bg-[#0b041c] text-slate-900 dark:text-white flex flex-col relative selection:bg-fuchsia-500 selection:text-white pb-16 md:pb-0 overflow-x-hidden transition-colors">
+    <div
+      className={`min-h-screen bg-gradient-to-br from-rose-50 via-amber-50/70 to-cyan-50 dark:bg-none dark:bg-[#0b041c] text-slate-900 dark:text-white flex flex-col relative selection:bg-fuchsia-500 selection:text-white overflow-x-hidden transition-colors ${
+        hideNavigationChrome ? 'pb-0' : 'pb-16 md:pb-0'
+      }`}
+    >
       {/* Vibrant Multi-Color Ambient Party Accents */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-36 -left-24 w-[480px] h-[420px] bg-gradient-to-br from-fuchsia-400/25 via-rose-400/20 to-amber-300/20 dark:from-fuchsia-600/20 dark:via-purple-600/15 dark:to-transparent blur-3xl rounded-full" />
@@ -528,17 +545,19 @@ export default function App() {
         <div className="absolute -bottom-32 left-1/3 w-[520px] h-[340px] bg-gradient-to-tr from-amber-300/25 via-pink-300/20 to-violet-400/20 dark:from-amber-500/10 dark:via-fuchsia-600/10 dark:to-transparent blur-3xl rounded-full" />
       </div>
 
-      {/* Top Bar Navigation */}
-      <Navbar
-        currentView={currentView}
-        onChangeView={setCurrentView}
-        isAdminLoggedIn={isAdminLoggedIn}
-        hasMyTicket={!!myRegistration}
-        onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
-      />
+      {/* Top Bar Navigation (Hidden in Check-in Fullscreen Display Mode) */}
+      {!hideNavigationChrome && (
+        <Navbar
+          currentView={currentView}
+          onChangeView={setCurrentView}
+          isAdminLoggedIn={isAdminLoggedIn}
+          hasMyTicket={!!myRegistration}
+          onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
+        />
+      )}
 
       {/* Floating banner when admin is previewing attendee view */}
-      {isAdminLoggedIn && currentView !== 'admin' && (
+      {!hideNavigationChrome && isAdminLoggedIn && currentView !== 'admin' && currentView !== 'checkin' && (
         <div className="w-full bg-white/95 dark:bg-[#140a2b]/95 backdrop-blur-md border-b-2 border-fuchsia-300/70 dark:border-fuchsia-500/40 text-slate-900 dark:text-white py-2 px-4 shadow-sm dark:shadow-md sticky top-14 sm:top-16 z-30 flex items-center justify-between gap-2 text-xs transition-colors">
           <div className="font-bold bg-gradient-to-r from-fuchsia-600 to-cyan-600 dark:from-fuchsia-300 dark:to-cyan-300 bg-clip-text text-transparent truncate">
             {t(
@@ -560,7 +579,13 @@ export default function App() {
       )}
 
       {/* Main Viewport Content */}
-      <main className="flex-1 w-full max-w-6xl mx-auto px-3 sm:px-4 py-5 sm:py-10 relative z-10">
+      <main
+        className={`flex-1 w-full mx-auto relative z-10 ${
+          hideNavigationChrome
+            ? 'max-w-7xl px-4 sm:px-8 py-4 sm:py-6 flex flex-col justify-center'
+            : 'max-w-6xl px-3 sm:px-4 py-5 sm:py-10'
+        }`}
+      >
         {isInitialLoading ? (
           <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3 text-slate-600 dark:text-purple-200">
             <Loader2 className="w-8 h-8 text-fuchsia-600 dark:text-cyan-400 animate-spin" />
@@ -635,6 +660,20 @@ export default function App() {
               />
             )}
 
+            {/* VIEW 4.5: ENTRANCE CHECK-IN DISPLAY (QR CODE + LOW-QUOTA REAL-TIME FEED) */}
+            {currentView === 'checkin' && (
+              <CheckinDisplayScreen
+                config={config}
+                isAdminLoggedIn={isAdminLoggedIn}
+                isFullscreen={isCheckinFullscreen}
+                onFullscreenChange={setIsCheckinFullscreen}
+                onBackToAdmin={() => {
+                  setIsCheckinFullscreen(false);
+                  setCurrentView('admin');
+                }}
+              />
+            )}
+
             {/* VIEW 5: ADMIN DASHBOARD */}
             {currentView === 'admin' && (
               <>
@@ -657,6 +696,7 @@ export default function App() {
                     onLogout={handleAdminLogout}
                     onOpenVipView={() => setCurrentView('vip')}
                     onOpenLiveView={() => setCurrentView('livedraw')}
+                    onOpenCheckinDisplay={() => setCurrentView('checkin')}
                     onSwitchToUserView={() => setCurrentView(myRegistration ? 'ticket' : 'register')}
                   />
                 ) : (
@@ -687,7 +727,7 @@ export default function App() {
       </main>
 
       {/* Discreet bottom admin link - Not prominent, small text at screen bottom */}
-      {!isAdminLoggedIn && (
+      {!isAdminLoggedIn && !hideNavigationChrome && (
         <footer className="w-full py-3 mt-auto text-center z-10 pb-18 md:pb-6">
           <button
             type="button"
@@ -705,13 +745,15 @@ export default function App() {
       )}
 
       {/* Mobile Fixed Bottom Navigation */}
-      <MobileBottomNav
-        currentView={currentView}
-        onChangeView={setCurrentView}
-        isAdminLoggedIn={isAdminLoggedIn}
-        hasMyTicket={!!myRegistration}
-        onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
-      />
+      {!hideNavigationChrome && (
+        <MobileBottomNav
+          currentView={currentView}
+          onChangeView={setCurrentView}
+          isAdminLoggedIn={isAdminLoggedIn}
+          hasMyTicket={!!myRegistration}
+          onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
+        />
+      )}
 
       {/* Admin Login Modal (Numpad PIN: 236248) */}
       <AdminLoginModal

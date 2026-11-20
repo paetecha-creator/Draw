@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Sparkles, MapPin, Calendar, CheckCircle2, QrCode, Share2, Phone } from 'lucide-react';
+import { Sparkles, MapPin, Calendar, CheckCircle2, QrCode, Share2, Phone, Map as MapIcon } from 'lucide-react';
 import { AttendeeRegistration, PartyConfig } from '../types/party';
 import { soundFX } from '../utils/audio';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { PartyDialogModal, PartyDialogState } from './PartyDialogModal';
+import { TableFloorPlanModal } from './TableFloorPlanModal';
 
 interface TicketPassProps {
   registration: AttendeeRegistration;
@@ -18,6 +19,7 @@ export const TicketPass: React.FC<TicketPassProps> = ({
   onRegisterAnother,
 }) => {
   const { t } = usePreferences();
+  const [isFloorPlanOpen, setIsFloorPlanOpen] = useState(false);
   const [dialog, setDialog] = useState<PartyDialogState>({
     isOpen: false,
     mode: 'alert',
@@ -148,6 +150,18 @@ export const TicketPass: React.FC<TicketPassProps> = ({
 
       {/* CTA Actions */}
       <div className="w-full mt-4 flex flex-col gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            soundFX.playClick();
+            setIsFloorPlanOpen(true);
+          }}
+          className="w-full min-h-[50px] py-3 px-4 rounded-2xl bg-gradient-to-r from-fuchsia-600 via-rose-500 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 text-white text-sm font-extrabold shadow-lg shadow-fuchsia-500/25 flex items-center justify-center gap-2 transition active:scale-[0.98] cursor-pointer"
+        >
+          <MapIcon className="w-4 h-4 shrink-0" />
+          <span>{t('ดูผังโต๊ะของคุณ', 'View Your Table Map')}</span>
+        </button>
+
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -192,6 +206,14 @@ export const TicketPass: React.FC<TicketPassProps> = ({
           </button>
         </div>
       </div>
+
+      <TableFloorPlanModal
+        isOpen={isFloorPlanOpen}
+        onClose={() => setIsFloorPlanOpen(false)}
+        tableNumber={registration.tableNumber}
+        attendeeName={registration.fullName}
+        eventVenue={config.eventVenue}
+      />
 
       <PartyDialogModal
         dialog={dialog}

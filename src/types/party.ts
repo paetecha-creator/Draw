@@ -53,6 +53,18 @@ export interface LuckyDrawRecord {
   round: number;
 }
 
+export interface TableMarker {
+  tableNumber: string; // e.g. "A1", "โต๊ะ 01"
+  x: number; // Percentage 0..100 from left
+  y: number; // Percentage 0..100 from top
+}
+
+export interface FloorPlanData {
+  imageUrl: string;
+  markers: TableMarker[];
+  updatedAt: string;
+}
+
 export interface PartyConfig {
   eventName: string;
   eventSubtitle?: string; // Slogan, theme, or company name
@@ -70,4 +82,5 @@ export interface PartyConfig {
   claimCountdownEndAt?: string; // ISO timestamp when 60s claim timer ends (empty = stopped)
   claimCountdownWinnerId?: string; // Winner record ID currently being timed
   claimCountdownPrizeId?: string; // Prize ID for the active countdown round
+  hasFloorPlan?: boolean; // Whether Admin has uploaded a banquet table floor plan
 }

@@ -42,6 +42,7 @@ import {
   Square,
   RotateCw,
   Ban,
+  QrCode,
 } from 'lucide-react';
 import {
   AttendeeRegistration,
@@ -60,6 +61,7 @@ import { soundFX } from '../utils/audio';
 import { PrizeManagerModal } from './PrizeManagerModal';
 import { NumpadPinModal } from './NumpadPinModal';
 import { PartyDialogModal, PartyDialogState, PartyDialogVariant } from './PartyDialogModal';
+import { FloorPlanEditor } from './FloorPlanEditor';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 interface AdminDashboardProps {
@@ -80,6 +82,7 @@ interface AdminDashboardProps {
   onLogout: () => void;
   onOpenVipView?: () => void;
   onOpenLiveView?: () => void;
+  onOpenCheckinDisplay?: () => void;
   onSwitchToUserView?: () => void;
 }
 
@@ -101,11 +104,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLogout,
   onOpenVipView,
   onOpenLiveView,
+  onOpenCheckinDisplay,
   onSwitchToUserView,
 }) => {
   const { lang, t } = usePreferences();
   // Navigation tabs inside admin
-  const [activeTab, setActiveTab] = useState<'overview' | 'roster' | 'prizes' | 'luckydraw' | 'history' | 'settings'>('luckydraw');
+  const [activeTab, setActiveTab] = useState<'overview' | 'prizes' | 'luckydraw' | 'history' | 'settings'>('luckydraw');
 
   // Search & Filter state for attendees
   const [attendeeSearch, setAttendeeSearch] = useState('');
@@ -1126,6 +1130,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
           </button>
 
+          {onOpenCheckinDisplay && (
+            <button
+              type="button"
+              onClick={() => {
+                soundFX.playClick();
+                onOpenCheckinDisplay();
+              }}
+              className="min-h-[42px] px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition cursor-pointer"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>{t('หน้าจอรับลงทะเบียน', 'Check-in Screen')}</span>
+            </button>
+          )}
+
           {onOpenLiveView && (
             <button
               type="button"
@@ -1317,22 +1335,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           type="button"
           onClick={() => {
             soundFX.playClick();
-            setActiveTab('roster');
-          }}
-          className={`min-h-[44px] px-4 py-2 text-xs font-extrabold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
-            activeTab === 'roster'
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/25'
-              : 'text-slate-600 dark:text-purple-200 hover:text-emerald-700 dark:hover:text-white hover:bg-emerald-50 dark:hover:bg-white/10'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>{t(`นำเข้าข้อมูล Excel (${roster.length})`, `Import Excel (${roster.length})`)}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            soundFX.playClick();
             setActiveTab('history');
           }}
           className={`min-h-[44px] px-4 py-2 text-xs font-extrabold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer ${
@@ -1358,8 +1360,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           }`}
         >
           <Settings className="w-4 h-4" />
-          <span>{t('ตั้งค่างานเลี้ยง & สลับงานใหม่', 'Event Settings & Reset')}</span>
+          <span>{t('ตั้งค่างานเลี้ยง · ผังโต๊ะ · Excel', 'Settings · Floor Plan · Excel')}</span>
         </button>
+
+        {onOpenCheckinDisplay && (
+          <button
+            type="button"
+            onClick={() => {
+              soundFX.playClick();
+              onOpenCheckinDisplay();
+            }}
+            className="min-h-[44px] px-4 py-2 text-xs font-extrabold rounded-xl flex items-center gap-2 whitespace-nowrap shrink-0 transition cursor-pointer bg-emerald-500/15 hover:bg-emerald-500 text-emerald-700 dark:text-emerald-300 hover:text-white border border-emerald-400/50"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>{t('หน้าจอรับลงทะเบียน', 'Check-in Display')}</span>
+          </button>
+        )}
       </div>
 
       {/* =========================================================================
@@ -2078,158 +2094,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* =========================================================================
-          TAB 4: EXCEL ROSTER MANAGEMENT & IMPORT
-      ========================================================================= */}
-      {activeTab === 'roster' && (
-        <div className="space-y-6">
-          <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm dark:shadow-none">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  <span>{t('นำเข้าข้อมูลพนักงานและหมายเลขโต๊ะผ่านไฟล์ Excel', 'Import Employee Roster & Table Assignments via Excel')}</span>
-                </h3>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
-                  {t(
-                    'รองรับไฟล์ .xlsx และ .csv ระบบจะแทนที่ฐานข้อมูลรายชื่อพนักงานและหมายเลขโต๊ะเดิมทั้งหมดตามไฟล์ที่อัปโหลด (ไม่ลบรายชื่อผู้ลงทะเบียนเข้างานแล้ว)',
-                    'Supports .xlsx and .csv files. Importing replaces the entire employee & table roster with the uploaded file (existing check-ins are preserved).'
-                  )}
-                </p>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  soundFX.playClick();
-                  downloadSampleExcelTemplate(roster);
-                }}
-                className="min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold border border-zinc-300 dark:border-zinc-700 flex items-center justify-center gap-2 transition cursor-pointer shrink-0"
-              >
-                <Download className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <span>{t('ดาวน์โหลด Template Excel ตัวอย่าง', 'Download Sample Excel Template')}</span>
-              </button>
-            </div>
-
-            {excelImportMessage && (
-              <div
-                className={`mb-4 p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
-                  excelImportMessage.type === 'success'
-                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300'
-                }`}
-              >
-                {excelImportMessage.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-                )}
-                <span>{excelImportMessage.text}</span>
-              </div>
-            )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx, .xls, .csv"
-              onChange={handleExcelUpload}
-              className="hidden"
-            />
-
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-amber-500/70 dark:hover:border-amber-400/70 rounded-2xl p-6 text-center cursor-pointer bg-zinc-50 dark:bg-zinc-950/60 hover:bg-zinc-100 dark:hover:bg-zinc-950 transition"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mx-auto mb-2 text-amber-600 dark:text-amber-400 shadow-sm dark:shadow-none">
-                <Upload className="w-6 h-6" />
-              </div>
-              <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                {excelImportLoading
-                  ? t('กำลังอ่านและประมวลผลไฟล์ Excel...', 'Reading and parsing Excel file...')
-                  : t('คลิกเพื่อเลือกไฟล์ Excel (.xlsx / .csv) หรือลากไฟล์มาวางที่นี่', 'Click to select an Excel file (.xlsx / .csv) or drop it here')}
-              </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
-                {t(
-                  'คอลัมน์ที่รองรับ: รหัสพนักงาน, ชื่อ-นามสกุล, ชื่อเล่น, แผนก, หมายเลขโต๊ะ, กลุ่ม/บทบาท, เบอร์โทร',
-                  'Supported columns: Employee ID, Full Name, Nickname, Department, Table Number, Group/Role, Phone'
-                )}
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm dark:shadow-none">
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-              <div className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                {t(`รายชื่อพนักงานในระบบทั้งหมด (${roster.length} คน)`, `Total Employees in Roster (${roster.length})`)}
-              </div>
-            </div>
-
-            {/* Mobile Card List for Roster */}
-            <div className="md:hidden divide-y divide-zinc-200 dark:divide-zinc-800/80 max-h-[26rem] overflow-y-auto">
-              {roster.map((emp) => (
-                <div key={emp.id} className="p-3.5 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{emp.id}</span>
-                    </div>
-                    <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
-                      {emp.fullName} {emp.nickname ? `(${emp.nickname})` : ''}
-                    </div>
-                    <div className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
-                      {emp.department} · {emp.groupRole || t('พนักงานทั่วไป', 'General Staff')}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300">
-                      {emp.tableNumber}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Desktop Table for Roster */}
-            <div className="hidden md:block overflow-x-auto max-h-96">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 text-[11px] font-semibold border-b border-zinc-200 dark:border-zinc-800 sticky top-0">
-                  <tr>
-                    <th className="py-2.5 px-4">{t('รหัสพนักงาน', 'Employee ID')}</th>
-                    <th className="py-2.5 px-4">{t('ชื่อ - นามสกุล', 'Full Name')}</th>
-                    <th className="py-2.5 px-4">{t('ชื่อเล่น', 'Nickname')}</th>
-                    <th className="py-2.5 px-4">{t('แผนก', 'Department')}</th>
-                    <th className="py-2.5 px-4">{t('หมายเลขโต๊ะที่จัดสรร', 'Assigned Table')}</th>
-                    <th className="py-2.5 px-4">{t('กลุ่ม / บทบาท', 'Group / Role')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
-                  {roster.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition">
-                      <td className="py-2.5 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">
-                        {emp.id}
-                      </td>
-                      <td className="py-2.5 px-4 font-semibold text-zinc-900 dark:text-zinc-100">
-                        {emp.fullName}
-                      </td>
-                      <td className="py-2.5 px-4 text-amber-700 dark:text-amber-300">
-                        {emp.nickname || '-'}
-                      </td>
-                      <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
-                        {emp.department}
-                      </td>
-                      <td className="py-2.5 px-4 font-mono text-amber-700 dark:text-amber-300 font-semibold">
-                        {emp.tableNumber}
-                      </td>
-                      <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
-                        {emp.groupRole || t('พนักงานทั่วไป', 'General Staff')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =========================================================================
           TAB 5: LUCKY DRAW WINNERS REPORT & EXCEL EXPORT
@@ -2715,6 +2580,167 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
             </div>
           </form>
+
+          {/* FLOOR PLAN UPLOAD & TABLE PIN EDITOR */}
+          <FloorPlanEditor
+            roster={roster}
+            config={config}
+            onUpdateConfig={onUpdateConfig}
+          />
+
+          {/* EXCEL ROSTER MANAGEMENT & IMPORT (MOVED INTO EVENT SETTINGS) */}
+          <div className="space-y-4">
+            <div className="p-5 sm:p-6 rounded-3xl bg-white/95 dark:bg-[#140a2b]/95 border-2 border-emerald-200/80 dark:border-emerald-500/30 shadow-md">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <FileSpreadsheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <span>
+                      {t(
+                        `นำเข้าข้อมูลพนักงานและหมายเลขโต๊ะผ่านไฟล์ Excel (${roster.length} คน)`,
+                        `Import Employee Roster & Table Assignments via Excel (${roster.length})`
+                      )}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-purple-200/80 mt-1">
+                    {t(
+                      'รองรับไฟล์ .xlsx และ .csv ระบบจะแทนที่ฐานข้อมูลรายชื่อพนักงานและหมายเลขโต๊ะเดิมทั้งหมดตามไฟล์ที่อัปโหลด (ไม่ลบรายชื่อผู้ลงทะเบียนเข้างานแล้ว)',
+                      'Supports .xlsx and .csv files. Importing replaces the entire employee & table roster with the uploaded file (existing check-ins are preserved).'
+                    )}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundFX.playClick();
+                    downloadSampleExcelTemplate(roster);
+                  }}
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold border border-zinc-300 dark:border-zinc-700 flex items-center justify-center gap-2 transition cursor-pointer shrink-0"
+                >
+                  <Download className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span>{t('ดาวน์โหลด Template Excel ตัวอย่าง', 'Download Sample Excel Template')}</span>
+                </button>
+              </div>
+
+              {excelImportMessage && (
+                <div
+                  className={`mb-4 p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+                    excelImportMessage.type === 'success'
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-300'
+                  }`}
+                >
+                  {excelImportMessage.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                  )}
+                  <span>{excelImportMessage.text}</span>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={handleExcelUpload}
+                className="hidden"
+              />
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-emerald-300 dark:border-emerald-500/40 hover:border-emerald-500 dark:hover:border-emerald-400 rounded-2xl p-6 text-center cursor-pointer bg-emerald-50/40 dark:bg-[#0b051c]/60 hover:bg-emerald-50/80 dark:hover:bg-[#0b051c] transition"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center mx-auto mb-2 text-emerald-600 dark:text-emerald-400 shadow-sm">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  {excelImportLoading
+                    ? t('กำลังอ่านและประมวลผลไฟล์ Excel...', 'Reading and parsing Excel file...')
+                    : t('คลิกเพื่อเลือกไฟล์ Excel (.xlsx / .csv) หรือลากไฟล์มาวางที่นี่', 'Click to select an Excel file (.xlsx / .csv) or drop it here')}
+                </div>
+                <p className="text-xs text-slate-600 dark:text-purple-200/75 mt-1">
+                  {t(
+                    'คอลัมน์ที่รองรับ: รหัสพนักงาน, ชื่อ-นามสกุล, ชื่อเล่น, แผนก, หมายเลขโต๊ะ, กลุ่ม/บทบาท, เบอร์โทร',
+                    'Supported columns: Employee ID, Full Name, Nickname, Department, Table Number, Group/Role, Phone'
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm dark:shadow-none">
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+                <div className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                  {t(`รายชื่อพนักงานในระบบทั้งหมด (${roster.length} คน)`, `Total Employees in Roster (${roster.length})`)}
+                </div>
+              </div>
+
+              {/* Mobile Card List for Roster */}
+              <div className="md:hidden divide-y divide-zinc-200 dark:divide-zinc-800/80 max-h-[26rem] overflow-y-auto">
+                {roster.map((emp) => (
+                  <div key={emp.id} className="p-3.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{emp.id}</span>
+                      </div>
+                      <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate mt-0.5">
+                        {emp.fullName} {emp.nickname ? `(${emp.nickname})` : ''}
+                      </div>
+                      <div className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate">
+                        {emp.department} · {emp.groupRole || t('พนักงานทั่วไป', 'General Staff')}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300">
+                        {emp.tableNumber}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table for Roster */}
+              <div className="hidden md:block overflow-x-auto max-h-96">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 text-[11px] font-semibold border-b border-zinc-200 dark:border-zinc-800 sticky top-0">
+                    <tr>
+                      <th className="py-2.5 px-4">{t('รหัสพนักงาน', 'Employee ID')}</th>
+                      <th className="py-2.5 px-4">{t('ชื่อ - นามสกุล', 'Full Name')}</th>
+                      <th className="py-2.5 px-4">{t('ชื่อเล่น', 'Nickname')}</th>
+                      <th className="py-2.5 px-4">{t('แผนก', 'Department')}</th>
+                      <th className="py-2.5 px-4">{t('หมายเลขโต๊ะที่จัดสรร', 'Assigned Table')}</th>
+                      <th className="py-2.5 px-4">{t('กลุ่ม / บทบาท', 'Group / Role')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
+                    {roster.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition">
+                        <td className="py-2.5 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">
+                          {emp.id}
+                        </td>
+                        <td className="py-2.5 px-4 font-semibold text-zinc-900 dark:text-zinc-100">
+                          {emp.fullName}
+                        </td>
+                        <td className="py-2.5 px-4 text-amber-700 dark:text-amber-300">
+                          {emp.nickname || '-'}
+                        </td>
+                        <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
+                          {emp.department}
+                        </td>
+                        <td className="py-2.5 px-4 font-mono text-amber-700 dark:text-amber-300 font-semibold">
+                          {emp.tableNumber}
+                        </td>
+                        <td className="py-2.5 px-4 text-zinc-600 dark:text-zinc-400">
+                          {emp.groupRole || t('พนักงานทั่วไป', 'General Staff')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
 
           {/* REUSABILITY ZONE */}
           <div className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-4 shadow-sm dark:shadow-none">

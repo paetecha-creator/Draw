@@ -1,11 +1,11 @@
 import React from 'react';
-import { Shield, Trophy, PartyPopper, Sun, Moon, Globe } from 'lucide-react';
+import { Shield, Trophy, PartyPopper, Sun, Moon, Globe, QrCode } from 'lucide-react';
 import { soundFX } from '../utils/audio';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 interface NavbarProps {
-  currentView: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip';
-  onChangeView: (view: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip') => void;
+  currentView: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip' | 'checkin';
+  onChangeView: (view: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip' | 'checkin') => void;
   isAdminLoggedIn: boolean;
   hasMyTicket: boolean;
   onOpenAdminLogin: () => void;
@@ -77,21 +77,39 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {isAdminLoggedIn && (
-            <button
-              type="button"
-              onClick={() => {
-                soundFX.playClick();
-                onChangeView('livedraw');
-              }}
-              className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 border-b-2 ${
-                currentView === 'livedraw'
-                  ? 'text-amber-600 dark:text-amber-300 border-amber-500 dark:border-amber-400 font-bold'
-                  : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
-              }`}
-            >
-              <Trophy className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-              <span>LIVE</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  soundFX.playClick();
+                  onChangeView('checkin');
+                }}
+                className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                  currentView === 'checkin'
+                    ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500 dark:border-emerald-400 font-bold'
+                    : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                <QrCode className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                <span>{t('หน้าจอรับลงทะเบียน', 'Check-in Screen')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  soundFX.playClick();
+                  onChangeView('livedraw');
+                }}
+                className={`py-1 transition whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                  currentView === 'livedraw'
+                    ? 'text-amber-600 dark:text-amber-300 border-amber-500 dark:border-amber-400 font-bold'
+                    : 'border-transparent hover:text-zinc-900 dark:hover:text-white'
+                }`}
+              >
+                <Trophy className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                <span>LIVE</span>
+              </button>
+            </>
           )}
         </nav>
 

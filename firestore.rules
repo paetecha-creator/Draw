@@ -58,6 +58,7 @@ service cloud.firestore {
         'claimCountdownEndAt',
         'claimCountdownWinnerId',
         'claimCountdownPrizeId',
+        'hasFloorPlan',
         'seeded',
         'updatedAt'
       ]) &&
@@ -78,8 +79,25 @@ service cloud.firestore {
       isOptionalString(data, 'claimCountdownEndAt', 64) &&
       isOptionalString(data, 'claimCountdownWinnerId', 128) &&
       isOptionalString(data, 'claimCountdownPrizeId', 128) &&
+      isOptionalBool(data, 'hasFloorPlan') &&
       isOptionalBool(data, 'seeded') &&
       isOptionalString(data, 'updatedAt', 64);
+    }
+
+    function isValidFloorPlan(data) {
+      return data.keys().hasAll(['imageUrl', 'markers', 'updatedAt']) &&
+      data.keys().hasOnly(['imageUrl', 'markers', 'updatedAt']) &&
+      data.imageUrl is string && data.imageUrl.size() <= 450000 &&
+      data.markers is list && data.markers.size() <= 300 &&
+      (data.markers.size() == 0 || (
+        data.markers[0] is map &&
+        data.markers[0].tableNumber is string &&
+        data.markers[0].tableNumber.size() >= 1 &&
+        data.markers[0].tableNumber.size() <= 150 &&
+        data.markers[0].x is number &&
+        data.markers[0].y is number
+      )) &&
+      data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64;
     }
 
     function isValidRoster(data) {
@@ -223,6 +241,13 @@ service cloud.firestore {
     match /config/{configId} {
       allow get: if isValidId(configId);
       allow create, update: if isValidId(configId) && isValidPartyConfig(incoming());
+    }
+
+    // Banquet table floor plan image & pinned table coordinates
+    match /floorPlans/{planId} {
+      allow get: if isValidId(planId);
+      allow create, update: if isValidId(planId) && isValidFloorPlan(incoming());
+      allow delete: if isValidId(planId);
     }
 
     // Employee roster for table lookup & Excel sync

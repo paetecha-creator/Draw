@@ -21,6 +21,7 @@
         "claimCountdownEndAt": { "type": "string", "maxLength": 64 },
         "claimCountdownWinnerId": { "type": "string", "maxLength": 128 },
         "claimCountdownPrizeId": { "type": "string", "maxLength": 128 },
+        "hasFloorPlan": { "type": "boolean" },
         "seeded": { "type": "boolean" },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
@@ -101,12 +102,27 @@
         "round": { "type": "number" }
       },
       "required": ["id", "prizeId", "prizeName", "prizeTier", "employeeId", "winnerName", "department", "tableNumber", "wonAt", "round"]
+    },
+    "FloorPlan": {
+      "title": "FloorPlan",
+      "description": "Banquet hall table floor plan image and pinned table coordinates configured by Admin.",
+      "type": "object",
+      "properties": {
+        "imageUrl": { "type": "string", "maxLength": 450000 },
+        "markers": { "type": "array" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["imageUrl", "markers", "updatedAt"]
     }
   },
   "firestore": {
     "/config/{configId}": {
       "schema": { "$ref": "#/entities/PartyConfig" },
       "description": "Main party event configuration document (doc id: main)."
+    },
+    "/floorPlans/{planId}": {
+      "schema": { "$ref": "#/entities/FloorPlan" },
+      "description": "Uploaded banquet floor plan image and table pin coordinates (doc id: main)."
     },
     "/roster/{employeeDocId}": {
       "schema": { "$ref": "#/entities/EmployeeRoster" },

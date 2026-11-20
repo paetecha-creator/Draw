@@ -4,8 +4,8 @@ import { soundFX } from '../utils/audio';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 interface MobileBottomNavProps {
-  currentView: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip';
-  onChangeView: (view: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip') => void;
+  currentView: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip' | 'checkin';
+  onChangeView: (view: 'register' | 'ticket' | 'livedraw' | 'admin' | 'vip' | 'checkin') => void;
   isAdminLoggedIn: boolean;
   hasMyTicket: boolean;
   onOpenAdminLogin: () => void;

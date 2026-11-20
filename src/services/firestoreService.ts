@@ -1,11 +1,13 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getCountFromServer,
   getDoc,
   getDocs,
   limit,
   onSnapshot,
+  orderBy,
   query,
   runTransaction,
   setDoc,
@@ -17,9 +19,11 @@ import { db } from '../firebase';
 import {
   AttendeeRegistration,
   EmployeeRoster,
+  FloorPlanData,
   LuckyDrawRecord,
   PartyConfig,
   Prize,
+  TableMarker,
 } from '../types/party';
 import { INITIAL_PRIZES, INITIAL_ROSTER } from '../data/mockEmployees';
 import {
@@ -31,6 +35,7 @@ import {
 
 const COLLECTIONS = {
   CONFIG: 'config',
+  FLOOR_PLANS: 'floorPlans',
   ROSTER: 'roster',
   PRIZES: 'prizes',
   REGISTRATIONS: 'registrations',
@@ -38,11 +43,13 @@ const COLLECTIONS = {
 } as const;
 
 const CONFIG_DOC_ID = 'main';
+const FLOOR_PLAN_DOC_ID = 'main';
 const ACTIVE_REG_LOCAL_KEY = 'party_my_registration_id_v1';
 const ACTIVE_REG_DOC_LOCAL_KEY = 'party_my_registration_doc_v1';
 
 const CACHE_KEYS = {
   CONFIG: 'party_fs_cache_config_v1',
+  FLOOR_PLAN: 'party_fs_cache_floorplan_v1',
   ROSTER: 'party_fs_cache_roster_v2',
   PRIZES: 'party_fs_cache_prizes_v1',
   REGISTRATIONS: 'party_fs_cache_regs_v1',
@@ -66,6 +73,7 @@ export const DEFAULT_PARTY_CONFIG: PartyConfig = {
   claimCountdownEndAt: '',
   claimCountdownWinnerId: '',
   claimCountdownPrizeId: '',
+  hasFloorPlan: false,
 };
 
 function readCache<T>(key: string): T | null {
@@ -147,8 +155,28 @@ function sanitizeConfigPayload(config: PartyConfig, seeded = true): Record<strin
     claimCountdownEndAt: clip(config.claimCountdownEndAt, 64),
     claimCountdownWinnerId: clip(config.claimCountdownWinnerId, 128),
     claimCountdownPrizeId: clip(config.claimCountdownPrizeId, 128),
+    hasFloorPlan: Boolean(config.hasFloorPlan),
     seeded,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+function sanitizeFloorPlanPayload(plan: FloorPlanData): Record<string, unknown> {
+  const markers: TableMarker[] = Array.isArray(plan.markers)
+    ? plan.markers
+        .filter((m) => m && typeof m.tableNumber === 'string' && m.tableNumber.trim().length > 0)
+        .slice(0, 300)
+        .map((m) => ({
+          tableNumber: clip(m.tableNumber, 150),
+          x: Math.min(100, Math.max(0, Number(Number(m.x).toFixed(2)) || 0)),
+          y: Math.min(100, Math.max(0, Number(Number(m.y).toFixed(2)) || 0)),
+        }))
+    : [];
+
+  return {
+    imageUrl: clip(plan.imageUrl, 450000),
+    markers,
+    updatedAt: clip(plan.updatedAt, 64) || new Date().toISOString(),
   };
 }
 
@@ -377,6 +405,138 @@ export const FirestoreService = {
     } catch {
       return null;
     }
+  },
+
+  async fetchRegistrationsCount(): Promise<number | null> {
+    try {
+      const snap = await getCountFromServer(collection(db, COLLECTIONS.REGISTRATIONS));
+      const count = snap.data().count;
+      return Number.isFinite(count) && count >= 0 ? count : null;
+    } catch {
+      return null;
+    }
+  },
+
+  getCachedFloorPlan(): FloorPlanData | null {
+    const cached = readCache<FloorPlanData>(CACHE_KEYS.FLOOR_PLAN);
+    if (!cached || !cached.imageUrl) return null;
+    return {
+      imageUrl: cached.imageUrl,
+      markers: Array.isArray(cached.markers) ? cached.markers : [],
+      updatedAt: cached.updatedAt || '',
+    };
+  },
+
+  async fetchFloorPlan(): Promise<FloorPlanData | null> {
+    try {
+      const snap = await getDoc(doc(db, COLLECTIONS.FLOOR_PLANS, FLOOR_PLAN_DOC_ID));
+      if (snap.exists()) {
+        const raw = snap.data() as FloorPlanData;
+        const plan: FloorPlanData = {
+          imageUrl: raw.imageUrl || '',
+          markers: Array.isArray(raw.markers) ? raw.markers : [],
+          updatedAt: raw.updatedAt || '',
+        };
+        if (plan.imageUrl) {
+          writeCache(CACHE_KEYS.FLOOR_PLAN, plan);
+          return plan;
+        }
+      }
+      return null;
+    } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        return this.getCachedFloorPlan();
+      }
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.GET, `${COLLECTIONS.FLOOR_PLANS}/${FLOOR_PLAN_DOC_ID}`);
+      }
+      return this.getCachedFloorPlan();
+    }
+  },
+
+  async saveFloorPlan(plan: FloorPlanData): Promise<void> {
+    const payload = sanitizeFloorPlanPayload(plan);
+    const normalized = payload as unknown as FloorPlanData;
+    writeCache(CACHE_KEYS.FLOOR_PLAN, normalized);
+    const path = `${COLLECTIONS.FLOOR_PLANS}/${FLOOR_PLAN_DOC_ID}`;
+    try {
+      await setDoc(doc(db, COLLECTIONS.FLOOR_PLANS, FLOOR_PLAN_DOC_ID), payload);
+    } catch (error) {
+      if (isOfflineOrNetworkError(error)) {
+        console.warn('Floor plan saved locally (Firestore offline).');
+        return;
+      }
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      }
+      throw error;
+    }
+  },
+
+  async deleteFloorPlan(): Promise<void> {
+    try {
+      localStorage.removeItem(CACHE_KEYS.FLOOR_PLAN);
+    } catch {
+      // ignore
+    }
+    const path = `${COLLECTIONS.FLOOR_PLANS}/${FLOOR_PLAN_DOC_ID}`;
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.FLOOR_PLANS, FLOOR_PLAN_DOC_ID));
+    } catch (error) {
+      if (isOfflineOrNetworkError(error)) return;
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.DELETE, path);
+      }
+    }
+  },
+
+  subscribeRecentRegistrations(
+    limitCount: number,
+    onData: (
+      latest: AttendeeRegistration[],
+      addedIds: string[],
+      removedIds: string[],
+      isInitial: boolean
+    ) => void
+  ): Unsubscribe {
+    let hasInitial = false;
+    const q = query(
+      collection(db, COLLECTIONS.REGISTRATIONS),
+      orderBy('registeredAt', 'desc'),
+      limit(limitCount)
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
+        }
+        const changes = snap.docChanges();
+        if (hasInitial && changes.length === 0) {
+          return;
+        }
+        const isInitial = !hasInitial;
+        hasInitial = true;
+        const addedIds = changes
+          .filter((c) => c.type === 'added')
+          .map((c) => c.doc.id);
+        const removedIds = changes
+          .filter((c) => c.type === 'removed')
+          .map((c) => c.doc.id);
+        const list = snap.docs.map((d) => d.data() as AttendeeRegistration);
+        onData(list, addedIds, removedIds, isInitial);
+      },
+      (error) => {
+        if (isOfflineOrNetworkError(error)) {
+          console.warn('Recent registrations listener offline.');
+          return;
+        }
+        if (isPermissionError(error)) {
+          handleFirestoreError(error, OperationType.LIST, COLLECTIONS.REGISTRATIONS);
+        }
+        console.warn('Recent registrations listener warning:', error);
+      }
+    );
   },
 
   subscribeLocalSync(onSync: (area: SyncArea) => void): () => void {
